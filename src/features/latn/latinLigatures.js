@@ -2,8 +2,8 @@
  * Apply Latin ligature feature to a range of tokens
  */
 
-import { ContextParams } from '../../tokenizer.js';
-import applySubstitution from '../applySubstitution.js';
+import { ContextParams } from "../../tokenizer.js";
+import applySubstitution from "../applySubstitution.js";
 
 /**
  * Update context params
@@ -11,8 +11,8 @@ import applySubstitution from '../applySubstitution.js';
  * @param {number} index current item index
  */
 function getContextParams(tokens, index) {
-    const context = tokens.map(token => token.activeState.value);
-    return new ContextParams(context, index || 0);
+  const context = tokens.map((token) => token.activeState.value);
+  return new ContextParams(context, index || 0);
 }
 
 /**
@@ -20,21 +20,23 @@ function getContextParams(tokens, index) {
  * @param {ContextRange} range a range of tokens
  */
 function latinLigature(range) {
-    const script = 'latn';
-    let tokens = this.tokenizer.getRangeTokens(range);
-    let contextParams = getContextParams(tokens);
-    contextParams.context.forEach((glyphIndex, index) => {
-        contextParams.setCurrentIndex(index);
-        let substitutions = this.query.lookupFeature({
-            tag: 'liga', script, contextParams
-        });
-        if (substitutions.length) {
-            substitutions.forEach(
-                action => applySubstitution(action, tokens, index)
-            );
-            contextParams = getContextParams(tokens);
-        }
+  const script = "latn";
+  let tokens = this.tokenizer.getRangeTokens(range);
+  let contextParams = getContextParams(tokens);
+  contextParams.context.forEach((glyphIndex, index) => {
+    contextParams.setCurrentIndex(index);
+    let substitutions = this.query.lookupFeature({
+      tag: "liga",
+      script,
+      contextParams,
     });
+    if (substitutions.length) {
+      substitutions.forEach(
+        (action) => applySubstitution(action, tokens, index),
+      );
+      contextParams = getContextParams(tokens);
+    }
+  });
 }
 
 export default latinLigature;

@@ -3,23 +3,23 @@
  * the corresponding layout rules.
  */
 
-import Tokenizer from './tokenizer.js';
-import FeatureQuery from './features/featureQuery.js';
-import arabicWordCheck from './features/arab/contextCheck/arabicWord.js';
-import arabicSentenceCheck from './features/arab/contextCheck/arabicSentence.js';
-import arabicPresentationForms from './features/arab/arabicPresentationForms.js';
-import arabicRequiredLigatures from './features/arab/arabicRequiredLigatures.js';
-import latinWordCheck from './features/latn/contextCheck/latinWord.js';
-import latinLigature from './features/latn/latinLigatures.js';
+import Tokenizer from "./tokenizer.js";
+import FeatureQuery from "./features/featureQuery.js";
+import arabicWordCheck from "./features/arab/contextCheck/arabicWord.js";
+import arabicSentenceCheck from "./features/arab/contextCheck/arabicSentence.js";
+import arabicPresentationForms from "./features/arab/arabicPresentationForms.js";
+import arabicRequiredLigatures from "./features/arab/arabicRequiredLigatures.js";
+import latinWordCheck from "./features/latn/contextCheck/latinWord.js";
+import latinLigature from "./features/latn/latinLigatures.js";
 
 /**
  * Create Bidi. features
  * @param {string} baseDir text base direction. value either 'ltr' or 'rtl'
  */
 function Bidi(baseDir) {
-    this.baseDir = baseDir || 'ltr';
-    this.tokenizer = new Tokenizer();
-    this.featuresTags = {};
+  this.baseDir = baseDir || "ltr";
+  this.tokenizer = new Tokenizer();
+  this.featuresTags = {};
 }
 
 /**
@@ -27,7 +27,7 @@ function Bidi(baseDir) {
  * @param {string} text a text input
  */
 Bidi.prototype.setText = function (text) {
-    this.text = text;
+  this.text = text;
 };
 
 /**
@@ -35,20 +35,22 @@ Bidi.prototype.setText = function (text) {
  * arabic word check for applying gsub features
  * arabic sentence check for adjusting arabic layout
  */
-Bidi.prototype.contextChecks = ({
-    latinWordCheck,
-    arabicWordCheck,
-    arabicSentenceCheck
-});
+Bidi.prototype.contextChecks = {
+  latinWordCheck,
+  arabicWordCheck,
+  arabicSentenceCheck,
+};
 
 /**
  * Register arabic word check
  */
 function registerContextChecker(checkId) {
-    const check = this.contextChecks[`${checkId}Check`];
-    return this.tokenizer.registerContextChecker(
-        checkId, check.startCheck, check.endCheck
-    );
+  const check = this.contextChecks[`${checkId}Check`];
+  return this.tokenizer.registerContextChecker(
+    checkId,
+    check.startCheck,
+    check.endCheck,
+  );
 }
 
 /**
@@ -56,10 +58,10 @@ function registerContextChecker(checkId) {
  * tokenize text input
  */
 function tokenizeText() {
-    registerContextChecker.call(this, 'latinWord');
-    registerContextChecker.call(this, 'arabicWord');
-    registerContextChecker.call(this, 'arabicSentence');
-    return this.tokenizer.tokenize(this.text);
+  registerContextChecker.call(this, "latinWord");
+  registerContextChecker.call(this, "arabicWord");
+  registerContextChecker.call(this, "arabicSentence");
+  return this.tokenizer.tokenize(this.text);
 }
 
 /**
@@ -67,15 +69,15 @@ function tokenizeText() {
  * TODO: check base dir before applying adjustments - priority low
  */
 function reverseArabicSentences() {
-    const ranges = this.tokenizer.getContextRanges('arabicSentence');
-    ranges.forEach(range => {
-        let rangeTokens = this.tokenizer.getRangeTokens(range);
-        this.tokenizer.replaceRange(
-            range.startIndex,
-            range.endOffset,
-            rangeTokens.reverse()
-        );
-    });
+  const ranges = this.tokenizer.getContextRanges("arabicSentence");
+  ranges.forEach((range) => {
+    let rangeTokens = this.tokenizer.getRangeTokens(range);
+    this.tokenizer.replaceRange(
+      range.startIndex,
+      range.endOffset,
+      rangeTokens.reverse(),
+    );
+  });
 }
 
 /**
@@ -84,15 +86,14 @@ function reverseArabicSentences() {
  * @param {Array} tags features tags list
  */
 Bidi.prototype.registerFeatures = function (script, tags) {
-    const supportedTags = tags.filter(
-        tag => this.query.supports({script, tag})
-    );
-    if (!Object.prototype.hasOwnProperty.call(this.featuresTags, script)) {
-        this.featuresTags[script] = supportedTags;
-    } else {
-        this.featuresTags[script] =
-        this.featuresTags[script].concat(supportedTags);
-    }
+  const supportedTags = tags.filter(
+    (tag) => this.query.supports({ script, tag }),
+  );
+  if (!Object.prototype.hasOwnProperty.call(this.featuresTags, script)) {
+    this.featuresTags[script] = supportedTags;
+  } else {
+    this.featuresTags[script] = this.featuresTags[script].concat(supportedTags);
+  }
 };
 
 /**
@@ -102,15 +103,17 @@ Bidi.prototype.registerFeatures = function (script, tags) {
  * @param {Font} font opentype font instance
  */
 Bidi.prototype.applyFeatures = function (font, features) {
-    if (!font) throw new Error(
-        'No valid font was provided to apply features'
+  if (!font) {
+    throw new Error(
+      "No valid font was provided to apply features",
     );
-    if (!this.query) this.query = new FeatureQuery(font);
-    for (let f = 0; f < features.length; f++) {
-        const feature = features[f];
-        if (!this.query.supports({script: feature.script})) continue;
-        this.registerFeatures(feature.script, feature.tags);
-    }
+  }
+  if (!this.query) this.query = new FeatureQuery(font);
+  for (let f = 0; f < features.length; f++) {
+    const feature = features[f];
+    if (!this.query.supports({ script: feature.script })) continue;
+    this.registerFeatures(feature.script, feature.tags);
+  }
 };
 
 /**
@@ -120,62 +123,62 @@ Bidi.prototype.applyFeatures = function (font, features) {
  * @param {function} modifier a modifier function to set token state
  */
 Bidi.prototype.registerModifier = function (modifierId, condition, modifier) {
-    this.tokenizer.registerModifier(modifierId, condition, modifier);
+  this.tokenizer.registerModifier(modifierId, condition, modifier);
 };
 
 /**
  * Check if 'glyphIndex' is registered
  */
 function checkGlyphIndexStatus() {
-    if (this.tokenizer.registeredModifiers.indexOf('glyphIndex') === -1) {
-        throw new Error(
-            'glyphIndex modifier is required to apply ' +
-            'arabic presentation features.'
-        );
-    }
+  if (this.tokenizer.registeredModifiers.indexOf("glyphIndex") === -1) {
+    throw new Error(
+      "glyphIndex modifier is required to apply " +
+        "arabic presentation features.",
+    );
+  }
 }
 
 /**
  * Apply arabic presentation forms features
  */
 function applyArabicPresentationForms() {
-    const script = 'arab';
-    if (!Object.prototype.hasOwnProperty.call(this.featuresTags, script)) return;
-    checkGlyphIndexStatus.call(this);
-    const ranges = this.tokenizer.getContextRanges('arabicWord');
-    ranges.forEach(range => {
-        arabicPresentationForms.call(this, range);
-    });
+  const script = "arab";
+  if (!Object.prototype.hasOwnProperty.call(this.featuresTags, script)) return;
+  checkGlyphIndexStatus.call(this);
+  const ranges = this.tokenizer.getContextRanges("arabicWord");
+  ranges.forEach((range) => {
+    arabicPresentationForms.call(this, range);
+  });
 }
 
 /**
  * Apply required arabic ligatures
  */
 function applyArabicRequireLigatures() {
-    const script = 'arab';
-    if (!Object.prototype.hasOwnProperty.call(this.featuresTags, script)) return;
-    const tags = this.featuresTags[script];
-    if (tags.indexOf('rlig') === -1) return;
-    checkGlyphIndexStatus.call(this);
-    const ranges = this.tokenizer.getContextRanges('arabicWord');
-    ranges.forEach(range => {
-        arabicRequiredLigatures.call(this, range);
-    });
+  const script = "arab";
+  if (!Object.prototype.hasOwnProperty.call(this.featuresTags, script)) return;
+  const tags = this.featuresTags[script];
+  if (tags.indexOf("rlig") === -1) return;
+  checkGlyphIndexStatus.call(this);
+  const ranges = this.tokenizer.getContextRanges("arabicWord");
+  ranges.forEach((range) => {
+    arabicRequiredLigatures.call(this, range);
+  });
 }
 
 /**
  * Apply required arabic ligatures
  */
 function applyLatinLigatures() {
-    const script = 'latn';
-    if (!Object.prototype.hasOwnProperty.call(this.featuresTags, script)) return;
-    const tags = this.featuresTags[script];
-    if (tags.indexOf('liga') === -1) return;
-    checkGlyphIndexStatus.call(this);
-    const ranges = this.tokenizer.getContextRanges('latinWord');
-    ranges.forEach(range => {
-        latinLigature.call(this, range);
-    });
+  const script = "latn";
+  if (!Object.prototype.hasOwnProperty.call(this.featuresTags, script)) return;
+  const tags = this.featuresTags[script];
+  if (tags.indexOf("liga") === -1) return;
+  checkGlyphIndexStatus.call(this);
+  const ranges = this.tokenizer.getContextRanges("latinWord");
+  ranges.forEach((range) => {
+    latinLigature.call(this, range);
+  });
 }
 
 /**
@@ -183,35 +186,35 @@ function applyLatinLigatures() {
  * @param {string} contextId context id
  */
 Bidi.prototype.checkContextReady = function (contextId) {
-    return !!this.tokenizer.getContext(contextId);
+  return !!this.tokenizer.getContext(contextId);
 };
 
 /**
  * Apply features to registered contexts
  */
 Bidi.prototype.applyFeaturesToContexts = function () {
-    if (this.checkContextReady('arabicWord')) {
-        applyArabicPresentationForms.call(this);
-        applyArabicRequireLigatures.call(this);
-    }
-    if (this.checkContextReady('latinWord')) {
-        applyLatinLigatures.call(this);
-    }
-    if (this.checkContextReady('arabicSentence')) {
-        reverseArabicSentences.call(this);
-    }
+  if (this.checkContextReady("arabicWord")) {
+    applyArabicPresentationForms.call(this);
+    applyArabicRequireLigatures.call(this);
+  }
+  if (this.checkContextReady("latinWord")) {
+    applyLatinLigatures.call(this);
+  }
+  if (this.checkContextReady("arabicSentence")) {
+    reverseArabicSentences.call(this);
+  }
 };
 
 /**
  * process text input
  * @param {string} text an input text
  */
-Bidi.prototype.processText = function(text) {
-    if (!this.text || this.text !== text) {
-        this.setText(text);
-        tokenizeText.call(this);
-        this.applyFeaturesToContexts();
-    }
+Bidi.prototype.processText = function (text) {
+  if (!this.text || this.text !== text) {
+    this.setText(text);
+    tokenizeText.call(this);
+    this.applyFeaturesToContexts();
+  }
 };
 
 /**
@@ -220,8 +223,8 @@ Bidi.prototype.processText = function(text) {
  * @param {string} text input text
  */
 Bidi.prototype.getBidiText = function (text) {
-    this.processText(text);
-    return this.tokenizer.getText();
+  this.processText(text);
+  return this.tokenizer.getText();
 };
 
 /**
@@ -229,15 +232,15 @@ Bidi.prototype.getBidiText = function (text) {
  * @param {text} text an input text
  */
 Bidi.prototype.getTextGlyphs = function (text) {
-    this.processText(text);
-    let indexes = [];
-    for (let i = 0; i < this.tokenizer.tokens.length; i++) {
-        const token = this.tokenizer.tokens[i];
-        if (token.state.deleted) continue;
-        const index = token.activeState.value;
-        indexes.push(Array.isArray(index) ? index[0] : index);
-    }
-    return indexes;
+  this.processText(text);
+  let indexes = [];
+  for (let i = 0; i < this.tokenizer.tokens.length; i++) {
+    const token = this.tokenizer.tokens[i];
+    if (token.state.deleted) continue;
+    const index = token.activeState.value;
+    indexes.push(Array.isArray(index) ? index[0] : index);
+  }
+  return indexes;
 };
 
 export default Bidi;

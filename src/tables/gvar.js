@@ -6,11 +6,11 @@
 // import table from '../table';
 
 function makeGvarTable() {
-    console.warn('Writing of gvar tables is not yet supported.');
+  console.warn("Writing of gvar tables is not yet supported.");
 }
 
 function parseGvarTable(/*data, start, names*/) {
-    console.warn('Parsing of gvar tables is not yet supported.');
+  console.warn("Parsing of gvar tables is not yet supported.");
 }
 
 export default { make: makeGvarTable, parse: parseGvarTable };
