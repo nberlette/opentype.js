@@ -27,72 +27,72 @@ function defineDependentProperty(glyph, externalName, internalName) {
  * @param {opentype.Font}
  * @param {Array}
  */
-function GlyphSet(font, glyphs) {
-  this.font = font;
-  this.glyphs = {};
-  if (Array.isArray(glyphs)) {
-    for (let i = 0; i < glyphs.length; i++) {
-      const glyph = glyphs[i];
-      glyph.path.unitsPerEm = font.unitsPerEm;
-      this.glyphs[i] = glyph;
+export class GlyphSet {
+  constructor(font, glyphs) {
+    this.font = font;
+    this.glyphs = {};
+    if (Array.isArray(glyphs)) {
+      for (let i = 0; i < glyphs.length; i++) {
+        const glyph = glyphs[i];
+        glyph.path.unitsPerEm = font.unitsPerEm;
+        this.glyphs[i] = glyph;
+      }
     }
-  }
 
-  this.length = (glyphs && glyphs.length) || 0;
+    this.length = (glyphs && glyphs.length) || 0;
+  }
+  /**
+   * @param  {number} index
+   * @return {opentype.Glyph}
+   */
+  get(index) {
+    // this.glyphs[index] is 'undefined' when low memory mode is on. glyph is pushed on request only.
+    if (this.glyphs[index] === undefined) {
+      this.font._push(index);
+      if (typeof this.glyphs[index] === "function") {
+        this.glyphs[index] = this.glyphs[index]();
+      }
+
+      let glyph = this.glyphs[index];
+      let unicodeObj = this.font._IndexToUnicodeMap[index];
+
+      if (unicodeObj) {
+        for (let j = 0; j < unicodeObj.unicodes.length; j++) {
+          glyph.addUnicode(unicodeObj.unicodes[j]);
+        }
+      }
+
+      if (this.font.cffEncoding) {
+        if (this.font.isCIDFont) {
+          glyph.name = "gid" + index;
+        } else {
+          glyph.name = this.font.cffEncoding.charset[index];
+        }
+      } else if (this.font.glyphNames.names) {
+        glyph.name = this.font.glyphNames.glyphIndexToName(index);
+      }
+
+      this.glyphs[index].advanceWidth =
+        this.font._hmtxTableData[index].advanceWidth;
+      this.glyphs[index].leftSideBearing =
+        this.font._hmtxTableData[index].leftSideBearing;
+    } else {
+      if (typeof this.glyphs[index] === "function") {
+        this.glyphs[index] = this.glyphs[index]();
+      }
+    }
+
+    return this.glyphs[index];
+  }
+  /**
+   * @param  {number} index
+   * @param  {Object}
+   */
+  push(index, loader) {
+    this.glyphs[index] = loader;
+    this.length++;
+  }
 }
-
-/**
- * @param  {number} index
- * @return {opentype.Glyph}
- */
-GlyphSet.prototype.get = function (index) {
-  // this.glyphs[index] is 'undefined' when low memory mode is on. glyph is pushed on request only.
-  if (this.glyphs[index] === undefined) {
-    this.font._push(index);
-    if (typeof this.glyphs[index] === "function") {
-      this.glyphs[index] = this.glyphs[index]();
-    }
-
-    let glyph = this.glyphs[index];
-    let unicodeObj = this.font._IndexToUnicodeMap[index];
-
-    if (unicodeObj) {
-      for (let j = 0; j < unicodeObj.unicodes.length; j++) {
-        glyph.addUnicode(unicodeObj.unicodes[j]);
-      }
-    }
-
-    if (this.font.cffEncoding) {
-      if (this.font.isCIDFont) {
-        glyph.name = "gid" + index;
-      } else {
-        glyph.name = this.font.cffEncoding.charset[index];
-      }
-    } else if (this.font.glyphNames.names) {
-      glyph.name = this.font.glyphNames.glyphIndexToName(index);
-    }
-
-    this.glyphs[index].advanceWidth =
-      this.font._hmtxTableData[index].advanceWidth;
-    this.glyphs[index].leftSideBearing =
-      this.font._hmtxTableData[index].leftSideBearing;
-  } else {
-    if (typeof this.glyphs[index] === "function") {
-      this.glyphs[index] = this.glyphs[index]();
-    }
-  }
-
-  return this.glyphs[index];
-};
-
-/**
- * @param  {number} index
- * @param  {Object}
- */
-GlyphSet.prototype.push = function (index, loader) {
-  this.glyphs[index] = loader;
-  this.length++;
-};
 
 /**
  * @alias opentype.glyphLoader
