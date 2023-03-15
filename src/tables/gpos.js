@@ -1,9 +1,9 @@
 // The `GPOS` table contains kerning pairs, among other things.
 // https://docs.microsoft.com/en-us/typography/opentype/spec/gpos
 
-import check from "../check.js";
+import * as check from "../check.js";
 import { Parser } from "../parse.js";
-import table from "../table.js";
+import { FeatureList, LookupList, ScriptList, Table } from "../table.js";
 
 const subtableParsers = new Array(10); // subtableParsers[0] is unused
 
@@ -108,7 +108,7 @@ subtableParsers[9] = function parseLookup9() {
 };
 
 // https://docs.microsoft.com/en-us/typography/opentype/spec/gpos
-function parseGposTable(data, start) {
+export function parse(data, start) {
   start = start || 0;
   const p = new Parser(data, start);
   const tableVersion = p.parseVersion(1);
@@ -139,25 +139,25 @@ function parseGposTable(data, start) {
 // NOT SUPPORTED
 const subtableMakers = new Array(10);
 
-function makeGposTable(gpos) {
-  return new table.Table("GPOS", [
+export function make(gpos) {
+  return new Table("GPOS", [
     { name: "version", type: "ULONG", value: 0x10000 },
     {
       name: "scripts",
       type: "TABLE",
-      value: new table.ScriptList(gpos.scripts),
+      value: new ScriptList(gpos.scripts),
     },
     {
       name: "features",
       type: "TABLE",
-      value: new table.FeatureList(gpos.features),
+      value: new FeatureList(gpos.features),
     },
     {
       name: "lookups",
       type: "TABLE",
-      value: new table.LookupList(gpos.lookups, subtableMakers),
+      value: new LookupList(gpos.lookups, subtableMakers),
     },
   ]);
 }
 
-export default { parse: parseGposTable, make: makeGposTable };
+export default { parse, make };

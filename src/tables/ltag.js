@@ -4,12 +4,12 @@
 // http://www.w3.org/International/articles/language-tags/
 // http://www.iana.org/assignments/language-subtag-registry/language-subtag-registry
 
-import check from "../check.js";
-import parse from "../parse.js";
-import table from "../table.js";
+import * as check from "../check.js";
+import { Parser } from "../parse.js";
+import { Table } from "../table.js";
 
-function makeLtagTable(tags) {
-  const result = new table.Table("ltag", [
+export function make(tags) {
+  const result = new Table("ltag", [
     { name: "version", type: "ULONG", value: 1 },
     { name: "flags", type: "ULONG", value: 0 },
     { name: "numTags", type: "ULONG", value: tags.length },
@@ -44,8 +44,8 @@ function makeLtagTable(tags) {
   return result;
 }
 
-function parseLtagTable(data, start) {
-  const p = new parse.Parser(data, start);
+export function parse(data, start) {
+  const p = new Parser(data, start);
   const tableVersion = p.parseULong();
   check.argument(tableVersion === 1, "Unsupported ltag table version.");
   // The 'ltag' specification does not define any flags; skip the field.
@@ -67,4 +67,4 @@ function parseLtagTable(data, start) {
   return tags;
 }
 
-export default { make: makeLtagTable, parse: parseLtagTable };
+export default { make, parse };

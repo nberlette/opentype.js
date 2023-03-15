@@ -1,9 +1,10 @@
 // The `name` naming table.
 // https://www.microsoft.com/typography/OTSPEC/name.htm
 
+import * as check from "../check.js";
 import { decode, encode } from "../types.js";
-import parse from "../parse.js";
-import table from "../table.js";
+import { Parser } from "../parse.js";
+import { Record, Table } from "../table.js";
 
 // NameIDs for the name table.
 const nameTableNames = [
@@ -521,29 +522,6 @@ const windowsLanguages = {
   0x046A: "yo",
 };
 
-// Returns a IETF BCP 47 language code, for example 'zh-Hant'
-// for 'Chinese in the traditional script'.
-function getLanguageCode(platformID, languageID, ltag) {
-  switch (platformID) {
-    case 0: // Unicode
-      if (languageID === 0xFFFF) {
-        return "und";
-      } else if (ltag) {
-        return ltag[languageID];
-      }
-
-      break;
-
-    case 1: // Macintosh
-      return macLanguages[languageID];
-
-    case 3: // Windows
-      return windowsLanguages[languageID];
-  }
-
-  return undefined;
-}
-
 const utf16 = "utf-16";
 
 // MacOS script ID → encoding. This table stores the default case,
@@ -604,25 +582,6 @@ const macLanguageEncodings = {
   146: "x-mac-gaelic", // langIrishGaelicScript
 };
 
-function getEncoding(platformID, encodingID, languageID) {
-  switch (platformID) {
-    case 0: // Unicode
-      return utf16;
-
-    case 1: // Apple Macintosh
-      return macLanguageEncodings[languageID] || macScriptEncodings[encodingID];
-
-    case 3: // Microsoft Windows
-      if (encodingID === 1 || encodingID === 10) {
-        return utf16;
-      }
-
-      break;
-  }
-
-  return undefined;
-}
-
 const platforms = {
   0: "unicode",
   1: "macintosh",
@@ -630,19 +589,17 @@ const platforms = {
   3: "windows",
 };
 
-function getPlatform(platformID) {
-  return platforms[platformID];
-}
-
 // Parse the naming `name` table.
 // FIXME: Format 1 additional fields are not supported yet.
 // ltag is the content of the `ltag' table, such as ['en', 'zh-Hans', 'de-CH-1904'].
-function parseNameTable(data, start, ltag) {
+export function parse(data, start, ltag) {
   const name = {};
-  const p = new parse.Parser(data, start);
+
+  const p = new Parser(data, start);
   const format = p.parseUShort();
   const count = p.parseUShort();
   const stringOffset = p.offset + p.parseUShort();
+
   for (let i = 0; i < count; i++) {
     const platformID = p.parseUShort();
     const encodingID = p.parseUShort();
@@ -693,72 +650,7 @@ function parseNameTable(data, start, ltag) {
   return name;
 }
 
-// {23: 'foo'} → {'foo': 23}
-// ['bar', 'baz'] → {'bar': 0, 'baz': 1}
-function reverseDict(dict) {
-  const result = {};
-  for (let key in dict) {
-    result[dict[key]] = parseInt(key);
-  }
-
-  return result;
-}
-
-function makeNameRecord(
-  platformID,
-  encodingID,
-  languageID,
-  nameID,
-  length,
-  offset,
-) {
-  return new table.Record("NameRecord", [
-    { name: "platformID", type: "USHORT", value: platformID },
-    { name: "encodingID", type: "USHORT", value: encodingID },
-    { name: "languageID", type: "USHORT", value: languageID },
-    { name: "nameID", type: "USHORT", value: nameID },
-    { name: "length", type: "USHORT", value: length },
-    { name: "offset", type: "USHORT", value: offset },
-  ]);
-}
-
-// Finds the position of needle in haystack, or -1 if not there.
-// Like String.indexOf(), but for arrays.
-function findSubArray(needle, haystack) {
-  const needleLength = needle.length;
-  const limit = haystack.length - needleLength + 1;
-
-  loop:
-  for (let pos = 0; pos < limit; pos++) {
-    for (; pos < limit; pos++) {
-      for (let k = 0; k < needleLength; k++) {
-        if (haystack[pos + k] !== needle[k]) {
-          continue loop;
-        }
-      }
-
-      return pos;
-    }
-  }
-
-  return -1;
-}
-
-function addStringToPool(s, pool) {
-  let offset = findSubArray(s, pool);
-  if (offset < 0) {
-    offset = pool.length;
-    let i = 0;
-    const len = s.length;
-    for (; i < len; ++i) {
-      pool.push(s[i]);
-    }
-  }
-
-  return offset;
-}
-
-function makeNameTable(names, ltag) {
+export function make(names, ltag) {
   const platformNameIds = reverseDict(platforms);
   const macLanguageIds = reverseDict(macLanguages);
   const windowsLanguageIds = reverseDict(windowsLanguages);
@@ -777,18 +669,14 @@ function makeNameTable(names, ltag) {
 
     for (let key in names[platform]) {
       let id = nameTableIds[key];
-      if (id === undefined) {
-        id = key;
-      }
+      if (id === undefined) id = key;
 
       nameID = parseInt(id);
 
-      if (isNaN(nameID)) {
-        throw new Error(
-          'Name table entry "' + key +
-            '" does not exist, see nameTableNames for complete list.',
-        );
-      }
+      check.assert(
+        !isNaN(nameID),
+        `Name table entry "${key}" does not exist, see nameTableNames for complete list.`,
+      );
 
       namesWithNumericKeys[nameID] = names[platform][key];
       nameIDs.push(nameID);
@@ -873,7 +761,7 @@ function makeNameTable(names, ltag) {
       (a.nameID - b.nameID));
   });
 
-  const t = new table.Table("name", [
+  const t = new Table("name", [
     { name: "format", type: "USHORT", value: 0 },
     { name: "count", type: "USHORT", value: nameRecords.length },
     {
@@ -895,4 +783,115 @@ function makeNameTable(names, ltag) {
   return t;
 }
 
-export default { parse: parseNameTable, make: makeNameTable };
+// Returns a IETF BCP 47 language code, for example 'zh-Hant'
+// for 'Chinese in the traditional script'.
+function getLanguageCode(platformID, languageID, ltag) {
+  switch (platformID) {
+    case 0: // Unicode
+      if (languageID === 0xFFFF) {
+        return "und";
+      } else if (ltag) {
+        return ltag[languageID];
+      }
+
+      break;
+
+    case 1: // Macintosh
+      return macLanguages[languageID];
+
+    case 3: // Windows
+      return windowsLanguages[languageID];
+  }
+
+  return undefined;
+}
+
+function getPlatform(platformID) {
+  return platforms[platformID];
+}
+
+function getEncoding(platformID, encodingID, languageID) {
+  switch (platformID) {
+    case 0: // Unicode
+      return utf16;
+
+    case 1: // Apple Macintosh
+      return macLanguageEncodings[languageID] || macScriptEncodings[encodingID];
+
+    case 3: // Microsoft Windows
+      if (encodingID === 1 || encodingID === 10) {
+        return utf16;
+      }
+
+      break;
+  }
+
+  return undefined;
+}
+
+// {23: 'foo'} → {'foo': 23}
+// ['bar', 'baz'] → {'bar': 0, 'baz': 1}
+function reverseDict(dict) {
+  const result = {};
+  for (let key in dict) {
+    result[dict[key]] = parseInt(key);
+  }
+
+  return result;
+}
+
+function makeNameRecord(
+  platformID,
+  encodingID,
+  languageID,
+  nameID,
+  length,
+  offset,
+) {
+  return new Record("NameRecord", [
+    { name: "platformID", type: "USHORT", value: platformID },
+    { name: "encodingID", type: "USHORT", value: encodingID },
+    { name: "languageID", type: "USHORT", value: languageID },
+    { name: "nameID", type: "USHORT", value: nameID },
+    { name: "length", type: "USHORT", value: length },
+    { name: "offset", type: "USHORT", value: offset },
+  ]);
+}
+
+// Finds the position of needle in haystack, or -1 if not there.
+// Like String.indexOf(), but for arrays.
+function findSubArray(needle, haystack) {
+  const needleLength = needle.length;
+  const limit = haystack.length - needleLength + 1;
+
+  loop:
+  for (let pos = 0; pos < limit; pos++) {
+    for (; pos < limit; pos++) {
+      for (let k = 0; k < needleLength; k++) {
+        if (haystack[pos + k] !== needle[k]) {
+          continue loop;
+        }
+      }
+
+      return pos;
+    }
+  }
+
+  return -1;
+}
+
+function addStringToPool(s, pool) {
+  let offset = findSubArray(s, pool);
+  if (offset < 0) {
+    offset = pool.length;
+    let i = 0;
+    const len = s.length;
+    for (; i < len; ++i) {
+      pool.push(s[i]);
+    }
+  }
+
+  return offset;
+}
+
+export default { parse, make };

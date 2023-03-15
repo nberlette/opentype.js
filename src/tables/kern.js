@@ -2,8 +2,24 @@
 // Note that some fonts use the GPOS OpenType layout table to specify kerning.
 // https://www.microsoft.com/typography/OTSPEC/kern.htm
 
-import check from "../check.js";
-import parse from "../parse.js";
+import * as check from "../check.js";
+import { Parser } from "../parse.js";
+import { log } from "../util.js";
+
+/**
+ * Parse the `kern` table which contains kerning pairs.
+ */
+export function parse(data, start) {
+  const p = new Parser(data, start);
+  const tableVersion = p.parseUShort();
+  if (tableVersion === 0) {
+    return parseWindowsKernTable(p);
+  } else if (tableVersion === 1) {
+    return parseMacKernTable(p);
+  } else {
+    throw new Error("Unsupported kern table version (" + tableVersion + ").");
+  }
+}
 
 function parseWindowsKernTable(p) {
   const pairs = {};
@@ -33,7 +49,7 @@ function parseMacKernTable(p) {
   const nTables = p.parseULong();
   //check.argument(nTables === 1, 'Only 1 subtable is supported (got ' + nTables + ').');
   if (nTables > 1) {
-    console.warn("Only the first kern subtable is supported.");
+    log.warn("Only the first kern subtable is supported.");
   }
   p.skip("uLong");
   const coverage = p.parseUShort();
@@ -53,17 +69,4 @@ function parseMacKernTable(p) {
   return pairs;
 }
 
-// Parse the `kern` table which contains kerning pairs.
-function parseKernTable(data, start) {
-  const p = new parse.Parser(data, start);
-  const tableVersion = p.parseUShort();
-  if (tableVersion === 0) {
-    return parseWindowsKernTable(p);
-  } else if (tableVersion === 1) {
-    return parseMacKernTable(p);
-  } else {
-    throw new Error("Unsupported kern table version (" + tableVersion + ").");
-  }
-}
-
-export default { parse: parseKernTable };
+export default { parse };

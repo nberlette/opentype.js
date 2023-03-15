@@ -1,163 +1,18 @@
 // The `cmap` table stores the mappings from characters to glyphs.
 // https://www.microsoft.com/typography/OTSPEC/cmap.htm
 
-import check from "../check.js";
-import parse from "../parse.js";
-import table from "../table.js";
+import * as check from "../check.js";
+import { getULong, getUShort, Parser } from "../parse.js";
+import { Table } from "../table.js";
+import { log } from "../util.js";
 
-function parseCmapTableFormat12(cmap, p) {
-  //Skip reserved.
-  p.parseUShort();
-
-  // Length in bytes of the sub-tables.
-  cmap.length = p.parseULong();
-  cmap.language = p.parseULong();
-
-  let groupCount;
-  cmap.groupCount = groupCount = p.parseULong();
-  cmap.glyphIndexMap = {};
-
-  for (let i = 0; i < groupCount; i += 1) {
-    const startCharCode = p.parseULong();
-    const endCharCode = p.parseULong();
-    let startGlyphId = p.parseULong();
-
-    for (let c = startCharCode; c <= endCharCode; c += 1) {
-      cmap.glyphIndexMap[c] = startGlyphId;
-      startGlyphId++;
-    }
-  }
-}
-
-function parseCmapTableFormat4(cmap, p, data, start, offset) {
-  // Length in bytes of the sub-tables.
-  cmap.length = p.parseUShort();
-  cmap.language = p.parseUShort();
-
-  // segCount is stored x 2.
-  let segCount;
-  cmap.segCount = segCount = p.parseUShort() >> 1;
-
-  // Skip searchRange, entrySelector, rangeShift.
-  p.skip("uShort", 3);
-
-  // The "unrolled" mapping from character codes to glyph indices.
-  cmap.glyphIndexMap = {};
-  const endCountParser = new parse.Parser(data, start + offset + 14);
-  const startCountParser = new parse.Parser(
-    data,
-    start + offset + 16 + segCount * 2,
-  );
-  const idDeltaParser = new parse.Parser(
-    data,
-    start + offset + 16 + segCount * 4,
-  );
-  const idRangeOffsetParser = new parse.Parser(
-    data,
-    start + offset + 16 + segCount * 6,
-  );
-  let glyphIndexOffset = start + offset + 16 + segCount * 8;
-  for (let i = 0; i < segCount - 1; i += 1) {
-    let glyphIndex;
-    const endCount = endCountParser.parseUShort();
-    const startCount = startCountParser.parseUShort();
-    const idDelta = idDeltaParser.parseShort();
-    const idRangeOffset = idRangeOffsetParser.parseUShort();
-    for (let c = startCount; c <= endCount; c += 1) {
-      if (idRangeOffset !== 0) {
-        // The idRangeOffset is relative to the current position in the idRangeOffset array.
-        // Take the current offset in the idRangeOffset array.
-        glyphIndexOffset = idRangeOffsetParser.offset +
-          idRangeOffsetParser.relativeOffset - 2;
-
-        // Add the value of the idRangeOffset, which will move us into the glyphIndex array.
-        glyphIndexOffset += idRangeOffset;
-
-        // Then add the character index of the current segment, multiplied by 2 for USHORTs.
-        glyphIndexOffset += (c - startCount) * 2;
-        glyphIndex = parse.getUShort(data, glyphIndexOffset);
-        if (glyphIndex !== 0) {
-          glyphIndex = (glyphIndex + idDelta) & 0xFFFF;
-        }
-      } else {
-        glyphIndex = (c + idDelta) & 0xFFFF;
-      }
-
-      cmap.glyphIndexMap[c] = glyphIndex;
-    }
-  }
-}
-
-// Parse the `cmap` table. This table stores the mappings from characters to glyphs.
-// There are many available formats, but we only support the Windows format 4 and 12.
-// This function returns a `CmapEncoding` object or null if no supported format could be found.
-function parseCmapTable(data, start) {
-  const cmap = {};
-  cmap.version = parse.getUShort(data, start);
-  check.argument(cmap.version === 0, "cmap table version should be 0.");
-
-  // The cmap table can contain many sub-tables, each with their own format.
-  // We're only interested in a "platform 0" (Unicode format) and "platform 3" (Windows format) table.
-  cmap.numTables = parse.getUShort(data, start + 2);
-  let offset = -1;
-  for (let i = cmap.numTables - 1; i >= 0; i -= 1) {
-    const platformId = parse.getUShort(data, start + 4 + (i * 8));
-    const encodingId = parse.getUShort(data, start + 4 + (i * 8) + 2);
-    if (
-      (platformId === 3 &&
-        (encodingId === 0 || encodingId === 1 || encodingId === 10)) ||
-      (platformId === 0 &&
-        (encodingId === 0 || encodingId === 1 || encodingId === 2 ||
-          encodingId === 3 || encodingId === 4))
-    ) {
-      offset = parse.getULong(data, start + 4 + (i * 8) + 4);
-      break;
-    }
-  }
-
-  if (offset === -1) {
-    // There is no cmap table in the font that we support.
-    throw new Error("No valid cmap sub-tables found.");
-  }
-
-  const p = new parse.Parser(data, start + offset);
-  cmap.format = p.parseUShort();
-
-  if (cmap.format === 12) {
-    parseCmapTableFormat12(cmap, p);
-  } else if (cmap.format === 4) {
-    parseCmapTableFormat4(cmap, p, data, start, offset);
-  } else {
-    throw new Error(
-      "Only format 4 and 12 cmap tables are supported (found format " +
-        cmap.format + ").",
-    );
-  }
-
-  return cmap;
-}
-
-function addSegment(t, code, glyphIndex) {
-  t.segments.push({
-    end: code,
-    start: code,
-    delta: -(code - glyphIndex),
-    offset: 0,
-    glyphIndex: glyphIndex,
-  });
-}
-
-function addTerminatorSegment(t) {
-  t.segments.push({
-    end: 0xFFFF,
-    start: 0xFFFF,
-    delta: 1,
-    offset: 0,
-  });
-}
-
-// Make cmap table, format 4 by default, 12 if needed only
-function makeCmapTable(glyphs) {
+/**
+ * Make cmap table, format 4 by default, 12 if needed only
+ *
+ * @param {GlyphSet} glyphs - The glyph set.
+ * @returns {Object} The cmap table.
+ */
+export function make(glyphs) {
   // Plan 0 is the base Unicode Plan but emojis, for example are on another plan, and needs cmap 12 format (with 32bit)
   let isPlan0Only = true;
   let i;
@@ -166,7 +21,7 @@ function makeCmapTable(glyphs) {
   for (i = glyphs.length - 1; i > 0; i -= 1) {
     const g = glyphs.get(i);
     if (g.unicode > 65535) {
-      console.log("Adding CMAP format 12 (needed!)");
+      log.warn("Adding CMAP format 12 (needed!)");
       isPlan0Only = false;
       break;
     }
@@ -202,7 +57,7 @@ function makeCmapTable(glyphs) {
     { name: "rangeShift", type: "USHORT", value: 0 },
   ]);
 
-  const t = new table.Table("cmap", cmapTable);
+  const t = new Table("cmap", cmapTable);
 
   t.segments = [];
   for (i = 0; i < glyphs.length; i += 1) {
@@ -338,4 +193,160 @@ function makeCmapTable(glyphs) {
   return t;
 }
 
-export default { parse: parseCmapTable, make: makeCmapTable };
+/**
+ * Parse the `cmap` table. This table stores the mappings from characters to glyphs.
+ * There are many available formats, but we only support the Windows format 4 and 12.
+ * This function returns a `CmapEncoding` object or null if no supported format
+ * could be found.
+ * @param {DataView} data - The binary data to parse.
+ * @param {number} start - The offset to the start of the table.
+ */
+export function parse(data, start) {
+  const cmap = {};
+  cmap.version = getUShort(data, start);
+  check.argument(cmap.version === 0, "cmap table version should be 0.");
+
+  // The cmap table can contain many sub-tables, each with their own format.
+  // We're only interested in a "platform 0" (Unicode format) and "platform 3" (Windows format) table.
+  cmap.numTables = getUShort(data, start + 2);
+  let offset = -1;
+  for (let i = cmap.numTables - 1; i >= 0; i -= 1) {
+    const platformId = getUShort(data, start + 4 + (i * 8));
+    const encodingId = getUShort(data, start + 4 + (i * 8) + 2);
+    if (
+      (platformId === 3 &&
+        (encodingId === 0 || encodingId === 1 || encodingId === 10)) ||
+      (platformId === 0 &&
+        (encodingId === 0 || encodingId === 1 || encodingId === 2 ||
+          encodingId === 3 || encodingId === 4))
+    ) {
+      offset = getULong(data, start + 4 + (i * 8) + 4);
+      break;
+    }
+  }
+
+  if (offset === -1) {
+    // There is no cmap table in the font that we support.
+    throw new Error("No valid cmap sub-tables found.");
+  }
+
+  const p = new Parser(data, start + offset);
+  cmap.format = p.parseUShort();
+
+  if (cmap.format === 12) {
+    parseCmapTableFormat12(cmap, p);
+  } else if (cmap.format === 4) {
+    parseCmapTableFormat4(cmap, p, data, start, offset);
+  } else {
+    throw new Error(
+      "Only format 4 and 12 cmap tables are supported (found format " +
+        cmap.format + ").",
+    );
+  }
+
+  return cmap;
+}
+
+function parseCmapTableFormat12(cmap, p) {
+  //Skip reserved.
+  p.parseUShort();
+
+  // Length in bytes of the sub-tables.
+  cmap.length = p.parseULong();
+  cmap.language = p.parseULong();
+
+  let groupCount;
+  cmap.groupCount = groupCount = p.parseULong();
+  cmap.glyphIndexMap = {};
+
+  for (let i = 0; i < groupCount; i += 1) {
+    const startCharCode = p.parseULong();
+    const endCharCode = p.parseULong();
+    let startGlyphId = p.parseULong();
+
+    for (let c = startCharCode; c <= endCharCode; c += 1) {
+      cmap.glyphIndexMap[c] = startGlyphId;
+      startGlyphId++;
+    }
+  }
+}
+
+function parseCmapTableFormat4(cmap, p, data, start, offset) {
+  // Length in bytes of the sub-tables.
+  cmap.length = p.parseUShort();
+  cmap.language = p.parseUShort();
+
+  // segCount is stored x 2.
+  let segCount;
+  cmap.segCount = segCount = p.parseUShort() >> 1;
+
+  // Skip searchRange, entrySelector, rangeShift.
+  p.skip("uShort", 3);
+
+  // The "unrolled" mapping from character codes to glyph indices.
+  cmap.glyphIndexMap = {};
+  const endCountParser = new Parser(data, start + offset + 14);
+  const startCountParser = new Parser(
+    data,
+    start + offset + 16 + segCount * 2,
+  );
+  const idDeltaParser = new Parser(
+    data,
+    start + offset + 16 + segCount * 4,
+  );
+  const idRangeOffsetParser = new Parser(
+    data,
+    start + offset + 16 + segCount * 6,
+  );
+  let glyphIndexOffset = start + offset + 16 + segCount * 8;
+  for (let i = 0; i < segCount - 1; i += 1) {
+    let glyphIndex;
+    const endCount = endCountParser.parseUShort();
+    const startCount = startCountParser.parseUShort();
+    const idDelta = idDeltaParser.parseShort();
+    const idRangeOffset = idRangeOffsetParser.parseUShort();
+    for (let c = startCount; c <= endCount; c += 1) {
+      if (idRangeOffset !== 0) {
+        // The idRangeOffset is relative to the current position in the idRangeOffset array.
+        // Take the current offset in the idRangeOffset array.
+        glyphIndexOffset = idRangeOffsetParser.offset +
+          idRangeOffsetParser.relativeOffset - 2;
+
+        // Add the value of the idRangeOffset, which will move us into the glyphIndex array.
+        glyphIndexOffset += idRangeOffset;
+
+        // Then add the character index of the current segment, multiplied by 2 for USHORTs.
+        glyphIndexOffset += (c - startCount) * 2;
+        glyphIndex = getUShort(data, glyphIndexOffset);
+        if (glyphIndex !== 0) {
+          glyphIndex = (glyphIndex + idDelta) & 0xFFFF;
+        }
+      } else {
+        glyphIndex = (c + idDelta) & 0xFFFF;
+      }
+
+      cmap.glyphIndexMap[c] = glyphIndex;
+    }
+  }
+}
+
+function addSegment(t, code, glyphIndex) {
+  t.segments.push({
+    end: code,
+    start: code,
+    delta: -(code - glyphIndex),
+    offset: 0,
+    glyphIndex: glyphIndex,
+  });
+}
+
+function addTerminatorSegment(t) {
+  t.segments.push({
+    end: 0xFFFF,
+    start: 0xFFFF,
+    delta: 1,
+    offset: 0,
+  });
+}
+
+export default { make, parse };

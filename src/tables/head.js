@@ -1,14 +1,14 @@
 // The `head` table contains global information about the font.
 // https://www.microsoft.com/typography/OTSPEC/head.htm
 
-import check from "../check.js";
-import parse from "../parse.js";
-import table from "../table.js";
+import * as check from "../check.js";
+import { Parser } from "../parse.js";
+import { Table } from "../table.js";
 
 // Parse the header `head` table
-function parseHeadTable(data, start) {
+export function parse(data, start) {
   const head = {};
-  const p = new parse.Parser(data, start);
+  const p = new Parser(data, start);
   head.version = p.parseVersion();
   head.fontRevision = Math.round(p.parseFixed() * 1000) / 1000;
   head.checkSumAdjustment = p.parseULong();
@@ -33,7 +33,7 @@ function parseHeadTable(data, start) {
   return head;
 }
 
-function makeHeadTable(options) {
+export function make(options) {
   // Apple Mac timestamp epoch is 01/01/1904 not 01/01/1970
   const timestamp = Math.round(new Date().getTime() / 1000) + 2082844800;
   let createdTimestamp = timestamp;
@@ -42,7 +42,7 @@ function makeHeadTable(options) {
     createdTimestamp = options.createdTimestamp + 2082844800;
   }
 
-  return new table.Table("head", [
+  return new Table("head", [
     { name: "version", type: "FIXED", value: 0x00010000 },
     { name: "fontRevision", type: "FIXED", value: 0x00010000 },
     { name: "checkSumAdjustment", type: "ULONG", value: 0 },
@@ -63,4 +63,4 @@ function makeHeadTable(options) {
   ], options);
 }
 
-export default { parse: parseHeadTable, make: makeHeadTable };
+export default { parse, make };

@@ -1,16 +1,21 @@
 // The `loca` table stores the offsets to the locations of the glyphs in the font.
 // https://www.microsoft.com/typography/OTSPEC/loca.htm
 
-import parse from "../parse.js";
+import { Parser } from "../parse.js";
 
-// Parse the `loca` table. This table stores the offsets to the locations of the glyphs in the font,
-// relative to the beginning of the glyphData table.
-// The number of glyphs stored in the `loca` table is specified in the `maxp` table (under numGlyphs)
-// The loca table has two versions: a short version where offsets are stored as uShorts, and a long
-// version where offsets are stored as uLongs. The `head` table specifies which version to use
-// (under indexToLocFormat).
-function parseLocaTable(data, start, numGlyphs, shortVersion) {
-  const p = new parse.Parser(data, start);
+/**
+ * Parse the `loca` table. This table stores the offsets to the locations of the g
+ * lyphs in the font, relative to the beginning of the glyphData table.
+ *
+ * The number of glyphs stored in the `loca` table is specified in the `maxp` table
+ * (under numGlyphs).
+ *
+ * The loca table has two versions: a short version where offsets are stored as
+ * uShorts, and a long version where offsets are stored as uLongs. The `head` table
+ * specifies which version to use (under indexToLocFormat).
+ */
+export function parse(data, start, numGlyphs, shortVersion) {
+  const p = new Parser(data, start);
   const parseFn = shortVersion ? p.parseUShort : p.parseULong;
   // There is an extra entry after the last index element to compute the length of the last glyph.
   // That's why we use numGlyphs + 1.
@@ -28,4 +33,4 @@ function parseLocaTable(data, start, numGlyphs, shortVersion) {
   return glyphOffsets;
 }
 
-export default { parse: parseLocaTable };
+export default { parse };

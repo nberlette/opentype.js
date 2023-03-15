@@ -1,9 +1,18 @@
 // The `GSUB` table contains ligatures, among other things.
 // https://www.microsoft.com/typography/OTSPEC/gsub.htm
 
-import check from "../check.js";
+import * as check from "../check.js";
 import { Parser } from "../parse.js";
-import table from "../table.js";
+import {
+  ClassDef,
+  Coverage,
+  FeatureList,
+  LookupList,
+  ScriptList,
+  Table,
+  tableList,
+  ushortList,
+} from "../table.js";
 
 const subtableParsers = new Array(9); // subtableParsers[0] is unused
 
@@ -214,7 +223,7 @@ subtableParsers[8] = function parseLookup8() {
 };
 
 // https://www.microsoft.com/typography/OTSPEC/gsub.htm
-function parseGsubTable(data, start) {
+export function parse(data, start) {
   start = start || 0;
   const p = new Parser(data, start);
   const tableVersion = p.parseVersion(1);
@@ -245,26 +254,26 @@ const subtableMakers = new Array(9);
 
 subtableMakers[1] = function makeLookup1(subtable) {
   if (subtable.substFormat === 1) {
-    return new table.Table("substitutionTable", [
+    return new Table("substitutionTable", [
       { name: "substFormat", type: "USHORT", value: 1 },
       {
         name: "coverage",
         type: "TABLE",
-        value: new table.Coverage(subtable.coverage),
+        value: new Coverage(subtable.coverage),
       },
       { name: "deltaGlyphID", type: "SHORT", value: subtable.deltaGlyphId },
     ]);
   } else if (subtable.substFormat === 2) {
-    return new table.Table(
+    return new Table(
       "substitutionTable",
       [
         { name: "substFormat", type: "USHORT", value: 2 },
         {
           name: "coverage",
           type: "TABLE",
-          value: new table.Coverage(subtable.coverage),
+          value: new Coverage(subtable.coverage),
         },
-      ].concat(table.ushortList("substitute", subtable.substitute)),
+      ].concat(ushortList("substitute", subtable.substitute)),
     );
   }
   check.fail("Lookup type 1 substFormat must be 1 or 2.");
@@ -275,20 +284,20 @@ subtableMakers[2] = function makeLookup2(subtable) {
     subtable.substFormat === 1,
     "Lookup type 2 substFormat must be 1.",
   );
-  return new table.Table(
+  return new Table(
     "substitutionTable",
     [
       { name: "substFormat", type: "USHORT", value: 1 },
       {
         name: "coverage",
         type: "TABLE",
-        value: new table.Coverage(subtable.coverage),
+        value: new Coverage(subtable.coverage),
       },
     ].concat(
-      table.tableList("seqSet", subtable.sequences, function (sequenceSet) {
-        return new table.Table(
+      tableList("seqSet", subtable.sequences, function (sequenceSet) {
+        return new Table(
           "sequenceSetTable",
-          table.ushortList("sequence", sequenceSet),
+          ushortList("sequence", sequenceSet),
         );
       }),
     ),
@@ -300,23 +309,23 @@ subtableMakers[3] = function makeLookup3(subtable) {
     subtable.substFormat === 1,
     "Lookup type 3 substFormat must be 1.",
   );
-  return new table.Table(
+  return new Table(
     "substitutionTable",
     [
       { name: "substFormat", type: "USHORT", value: 1 },
       {
         name: "coverage",
         type: "TABLE",
-        value: new table.Coverage(subtable.coverage),
+        value: new Coverage(subtable.coverage),
       },
     ].concat(
-      table.tableList(
+      tableList(
         "altSet",
         subtable.alternateSets,
         function (alternateSet) {
-          return new table.Table(
+          return new Table(
             "alternateSetTable",
-            table.ushortList("alternate", alternateSet),
+            ushortList("alternate", alternateSet),
           );
         },
       ),
@@ -329,25 +338,25 @@ subtableMakers[4] = function makeLookup4(subtable) {
     subtable.substFormat === 1,
     "Lookup type 4 substFormat must be 1.",
   );
-  return new table.Table(
+  return new Table(
     "substitutionTable",
     [
       { name: "substFormat", type: "USHORT", value: 1 },
       {
         name: "coverage",
         type: "TABLE",
-        value: new table.Coverage(subtable.coverage),
+        value: new Coverage(subtable.coverage),
       },
     ].concat(
-      table.tableList("ligSet", subtable.ligatureSets, function (ligatureSet) {
-        return new table.Table(
+      tableList("ligSet", subtable.ligatureSets, function (ligatureSet) {
+        return new Table(
           "ligatureSetTable",
-          table.tableList("ligature", ligatureSet, function (ligature) {
-            return new table.Table(
+          tableList("ligature", ligatureSet, function (ligature) {
+            return new Table(
               "ligatureTable",
               [{ name: "ligGlyph", type: "USHORT", value: ligature.ligGlyph }]
                 .concat(
-                  table.ushortList(
+                  ushortList(
                     "component",
                     ligature.components,
                     ligature.components.length + 1,
@@ -363,36 +372,36 @@ subtableMakers[4] = function makeLookup4(subtable) {
 
 subtableMakers[5] = function makeLookup5(subtable) {
   if (subtable.substFormat === 1) {
-    return new table.Table(
+    return new Table(
       "contextualSubstitutionTable",
       [
         { name: "substFormat", type: "USHORT", value: subtable.substFormat },
         {
           name: "coverage",
           type: "TABLE",
-          value: new table.Coverage(subtable.coverage),
+          value: new Coverage(subtable.coverage),
         },
       ].concat(
-        table.tableList(
+        tableList(
           "sequenceRuleSet",
           subtable.ruleSets,
           function (sequenceRuleSet) {
             if (!sequenceRuleSet) {
-              return new table.Table("NULL", null);
+              return new Table("NULL", null);
             }
-            return new table.Table(
+            return new Table(
               "sequenceRuleSetTable",
-              table.tableList(
+              tableList(
                 "sequenceRule",
                 sequenceRuleSet,
                 function (sequenceRule) {
-                  let tableData = table.ushortList(
+                  let tableData = ushortList(
                     "seqLookup",
                     [],
                     sequenceRule.lookupRecords.length,
                   )
                     .concat(
-                      table.ushortList(
+                      ushortList(
                         "inputSequence",
                         sequenceRule.input,
                         sequenceRule.input.length + 1,
@@ -416,7 +425,7 @@ subtableMakers[5] = function makeLookup5(subtable) {
                         value: record.lookupListIndex,
                       });
                   });
-                  return new table.Table("sequenceRuleTable", tableData);
+                  return new Table("sequenceRuleTable", tableData);
                 },
               ),
             );
@@ -425,41 +434,41 @@ subtableMakers[5] = function makeLookup5(subtable) {
       ),
     );
   } else if (subtable.substFormat === 2) {
-    return new table.Table(
+    return new Table(
       "contextualSubstitutionTable",
       [
         { name: "substFormat", type: "USHORT", value: subtable.substFormat },
         {
           name: "coverage",
           type: "TABLE",
-          value: new table.Coverage(subtable.coverage),
+          value: new Coverage(subtable.coverage),
         },
         {
           name: "classDef",
           type: "TABLE",
-          value: new table.ClassDef(subtable.classDef),
+          value: new ClassDef(subtable.classDef),
         },
       ].concat(
-        table.tableList(
+        tableList(
           "classSeqRuleSet",
           subtable.classSets,
           function (classSeqRuleSet) {
             if (!classSeqRuleSet) {
-              return new table.Table("NULL", null);
+              return new Table("NULL", null);
             }
-            return new table.Table(
+            return new Table(
               "classSeqRuleSetTable",
-              table.tableList(
+              tableList(
                 "classSeqRule",
                 classSeqRuleSet,
                 function (classSeqRule) {
-                  let tableData = table.ushortList(
+                  let tableData = ushortList(
                     "classes",
                     classSeqRule.classes,
                     classSeqRule.classes.length + 1,
                   )
                     .concat(
-                      table.ushortList(
+                      ushortList(
                         "seqLookupCount",
                         [],
                         classSeqRule.lookupRecords.length,
@@ -479,7 +488,7 @@ subtableMakers[5] = function makeLookup5(subtable) {
                         value: record.lookupListIndex,
                       });
                   });
-                  return new table.Table("classSeqRuleTable", tableData);
+                  return new Table("classSeqRuleTable", tableData);
                 },
               ),
             );
@@ -506,7 +515,7 @@ subtableMakers[5] = function makeLookup5(subtable) {
       tableData.push({
         name: "inputCoverage" + i,
         type: "TABLE",
-        value: new table.Coverage(coverage),
+        value: new Coverage(coverage),
       });
     });
 
@@ -524,7 +533,7 @@ subtableMakers[5] = function makeLookup5(subtable) {
         });
     });
 
-    let returnTable = new table.Table("contextualSubstitutionTable", tableData);
+    let returnTable = new Table("contextualSubstitutionTable", tableData);
 
     return returnTable;
   }
@@ -534,44 +543,44 @@ subtableMakers[5] = function makeLookup5(subtable) {
 
 subtableMakers[6] = function makeLookup6(subtable) {
   if (subtable.substFormat === 1) {
-    let returnTable = new table.Table(
+    let returnTable = new Table(
       "chainContextTable",
       [
         { name: "substFormat", type: "USHORT", value: subtable.substFormat },
         {
           name: "coverage",
           type: "TABLE",
-          value: new table.Coverage(subtable.coverage),
+          value: new Coverage(subtable.coverage),
         },
       ].concat(
-        table.tableList(
+        tableList(
           "chainRuleSet",
           subtable.chainRuleSets,
           function (chainRuleSet) {
-            return new table.Table(
+            return new Table(
               "chainRuleSetTable",
-              table.tableList("chainRule", chainRuleSet, function (chainRule) {
-                let tableData = table.ushortList(
+              tableList("chainRule", chainRuleSet, function (chainRule) {
+                let tableData = ushortList(
                   "backtrackGlyph",
                   chainRule.backtrack,
                   chainRule.backtrack.length,
                 )
                   .concat(
-                    table.ushortList(
+                    ushortList(
                       "inputGlyph",
                       chainRule.input,
                       chainRule.input.length + 1,
                     ),
                   )
                   .concat(
-                    table.ushortList(
+                    ushortList(
                       "lookaheadGlyph",
                       chainRule.lookahead,
                       chainRule.lookahead.length,
                     ),
                   )
                   .concat(
-                    table.ushortList(
+                    ushortList(
                       "substitution",
                       [],
                       chainRule.lookupRecords.length,
@@ -591,7 +600,7 @@ subtableMakers[6] = function makeLookup6(subtable) {
                       value: record.lookupListIndex,
                     });
                 });
-                return new table.Table("chainRuleTable", tableData);
+                return new Table("chainRuleTable", tableData);
               }),
             );
           },
@@ -615,7 +624,7 @@ subtableMakers[6] = function makeLookup6(subtable) {
       tableData.push({
         name: "backtrackCoverage" + i,
         type: "TABLE",
-        value: new table.Coverage(coverage),
+        value: new Coverage(coverage),
       });
     });
     tableData.push({
@@ -627,7 +636,7 @@ subtableMakers[6] = function makeLookup6(subtable) {
       tableData.push({
         name: "inputCoverage" + i,
         type: "TABLE",
-        value: new table.Coverage(coverage),
+        value: new Coverage(coverage),
       });
     });
     tableData.push({
@@ -639,7 +648,7 @@ subtableMakers[6] = function makeLookup6(subtable) {
       tableData.push({
         name: "lookaheadCoverage" + i,
         type: "TABLE",
-        value: new table.Coverage(coverage),
+        value: new Coverage(coverage),
       });
     });
 
@@ -662,7 +671,7 @@ subtableMakers[6] = function makeLookup6(subtable) {
         });
     });
 
-    let returnTable = new table.Table("chainContextTable", tableData);
+    let returnTable = new Table("chainContextTable", tableData);
 
     return returnTable;
   }
@@ -670,25 +679,25 @@ subtableMakers[6] = function makeLookup6(subtable) {
   check.assert(false, "lookup type 6 format must be 1, 2 or 3.");
 };
 
-function makeGsubTable(gsub) {
-  return new table.Table("GSUB", [
+export function make(gsub) {
+  return new Table("GSUB", [
     { name: "version", type: "ULONG", value: 0x10000 },
     {
       name: "scripts",
       type: "TABLE",
-      value: new table.ScriptList(gsub.scripts),
+      value: new ScriptList(gsub.scripts),
     },
     {
       name: "features",
       type: "TABLE",
-      value: new table.FeatureList(gsub.features),
+      value: new FeatureList(gsub.features),
     },
     {
       name: "lookups",
       type: "TABLE",
-      value: new table.LookupList(gsub.lookups, subtableMakers),
+      value: new LookupList(gsub.lookups, subtableMakers),
     },
   ]);
 }
 
-export default { parse: parseGsubTable, make: makeGsubTable };
+export default { parse, make };

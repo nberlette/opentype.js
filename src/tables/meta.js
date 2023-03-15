@@ -1,15 +1,15 @@
 // The `GPOS` table contains kerning pairs, among other things.
 // https://www.microsoft.com/typography/OTSPEC/gpos.htm
 
-import check from "../check.js";
+import * as check from "../check.js";
 import { decode } from "../types.js";
-import parse from "../parse.js";
-import table from "../table.js";
+import { Parser } from "../parse.js";
+import { Table } from "../table.js";
 
 // Parse the metadata `meta` table.
 // https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6meta.html
-function parseMetaTable(data, start) {
-  const p = new parse.Parser(data, start);
+export function parse(data, start) {
+  const p = new Parser(data, start);
   const tableVersion = p.parseULong();
   check.argument(tableVersion === 1, "Unsupported META table version.");
   p.parseULong(); // flags - currently unused and set to 0
@@ -31,12 +31,12 @@ function parseMetaTable(data, start) {
   return tags;
 }
 
-function makeMetaTable(tags) {
+export function make(tags) {
   const numTags = Object.keys(tags).length;
   let stringPool = "";
   const stringPoolOffset = 16 + numTags * 12;
 
-  const result = new table.Table("meta", [
+  const result = new Table("meta", [
     { name: "version", type: "ULONG", value: 1 },
     { name: "flags", type: "ULONG", value: 0 },
     { name: "offset", type: "ULONG", value: stringPoolOffset },
@@ -69,4 +69,4 @@ function makeMetaTable(tags) {
   return result;
 }
 
-export default { parse: parseMetaTable, make: makeMetaTable };
+export default { parse, make };

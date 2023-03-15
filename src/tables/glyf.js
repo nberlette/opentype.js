@@ -1,10 +1,10 @@
 // The `glyf` table describes the glyphs in TrueType outline format.
 // http://www.microsoft.com/typography/otspec/glyf.htm
 
-import check from "../check.js";
-import glyphset from "../glyphset.js";
-import parse from "../parse.js";
-import Path from "../path.js";
+import * as check from "../check.js";
+import { GlyphSet } from "../glyphset.js";
+import { Parser } from "../parse.js";
+import { Path } from "../path.js";
 
 // Parse the coordinate data for a glyph.
 function parseGlyphCoordinate(
@@ -40,7 +40,7 @@ function parseGlyphCoordinate(
 
 // Parse a TrueType glyph.
 function parseGlyph(glyph, data, start) {
-  const p = new parse.Parser(data, start);
+  const p = new Parser(data, start);
   glyph.numberOfContours = p.parseShort();
   glyph._xMin = p.parseShort();
   glyph._yMin = p.parseShort();
@@ -219,7 +219,7 @@ function getContours(points) {
 }
 
 // Convert the TrueType glyph outline to a Path.
-function getPath(points) {
+export function getPath(points) {
   const p = new Path();
   if (!points) {
     return p;
@@ -276,7 +276,7 @@ function buildPath(glyphs, glyph) {
     for (let j = 0; j < glyph.components.length; j += 1) {
       const component = glyph.components[j];
       const componentGlyph = glyphs.get(component.glyphIndex);
-      // Force the ttfGlyphLoader to parse the glyph.
+      // Force the GlyphSet.fromTTF to parse the glyph.
       componentGlyph.getPath();
       if (componentGlyph.points) {
         let transformedPoints;
@@ -315,7 +315,7 @@ function buildPath(glyphs, glyph) {
 }
 
 function parseGlyfTableAll(data, start, loca, font) {
-  const glyphs = new glyphset.GlyphSet(font);
+  const glyphs = new GlyphSet(font);
 
   // The last element of the loca table is invalid.
   for (let i = 0; i < loca.length - 1; i += 1) {
@@ -324,7 +324,7 @@ function parseGlyfTableAll(data, start, loca, font) {
     if (offset !== nextOffset) {
       glyphs.push(
         i,
-        glyphset.ttfGlyphLoader(
+        GlyphSet.fromTTF(
           font,
           i,
           parseGlyph,
@@ -334,7 +334,7 @@ function parseGlyfTableAll(data, start, loca, font) {
         ),
       );
     } else {
-      glyphs.push(i, glyphset.glyphLoader(font, i));
+      glyphs.push(i, GlyphSet.from(font, i));
     }
   }
 
@@ -342,7 +342,7 @@ function parseGlyfTableAll(data, start, loca, font) {
 }
 
 function parseGlyfTableOnLowMemory(data, start, loca, font) {
-  const glyphs = new glyphset.GlyphSet(font);
+  const glyphs = new GlyphSet(font);
 
   font._push = function (i) {
     const offset = loca[i];
@@ -350,7 +350,7 @@ function parseGlyfTableOnLowMemory(data, start, loca, font) {
     if (offset !== nextOffset) {
       glyphs.push(
         i,
-        glyphset.ttfGlyphLoader(
+        GlyphSet.fromTTF(
           font,
           i,
           parseGlyph,
@@ -360,7 +360,7 @@ function parseGlyfTableOnLowMemory(data, start, loca, font) {
         ),
       );
     } else {
-      glyphs.push(i, glyphset.glyphLoader(font, i));
+      glyphs.push(i, GlyphSet.from(font, i));
     }
   };
 
@@ -368,7 +368,7 @@ function parseGlyfTableOnLowMemory(data, start, loca, font) {
 }
 
 // Parse all the glyphs according to the offsets from the `loca` table.
-function parseGlyfTable(data, start, loca, font, opt) {
+export function parse(data, start, loca, font, opt) {
   if (opt.lowMemory) {
     return parseGlyfTableOnLowMemory(data, start, loca, font);
   } else {
@@ -376,4 +376,4 @@ function parseGlyfTable(data, start, loca, font, opt) {
   }
 }
 
-export default { getPath, parse: parseGlyfTable };
+export default { getPath, parse };

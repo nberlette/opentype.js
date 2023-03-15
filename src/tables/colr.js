@@ -2,44 +2,17 @@
 // https://www.microsoft.com/typography/OTSPEC/colr.htm
 
 import { Parser } from "../parse.js";
-import check from "../check.js";
-import table from "../table.js";
+import * as check from "../check.js";
+import { Table } from "../table.js";
 
-function parseColrTable(data, start) {
-  const p = new Parser(data, start);
-  const version = p.parseUShort();
-  check.argument(version === 0x0000, "Only COLRv0 supported.");
-  const numBaseGlyphRecords = p.parseUShort();
-  const baseGlyphRecordsOffset = p.parseOffset32();
-  const layerRecordsOffset = p.parseOffset32();
-  const numLayerRecords = p.parseUShort();
-  p.relativeOffset = baseGlyphRecordsOffset;
-  const baseGlyphRecords = p.parseRecordList(numBaseGlyphRecords, {
-    glyphID: Parser.uShort,
-    firstLayerIndex: Parser.uShort,
-    numLayers: Parser.uShort,
-  });
-  p.relativeOffset = layerRecordsOffset;
-  const layerRecords = p.parseRecordList(numLayerRecords, {
-    glyphID: Parser.uShort,
-    paletteIndex: Parser.uShort,
-  });
-
-  return {
-    version,
-    baseGlyphRecords,
-    layerRecords,
-  };
-}
-
-function makeColrTable(
+export function make(
   { version = 0x0000, baseGlyphRecords = [], layerRecords = [] },
 ) {
   check.argument(version === 0x0000, "Only COLRv0 supported.");
   const baseGlyphRecordsOffset = 14;
   const layerRecordsOffset = baseGlyphRecordsOffset +
     (baseGlyphRecords.length * 6);
-  return new table.Table("COLR", [
+  return new Table("COLR", [
     { name: "version", type: "USHORT", value: version },
     {
       name: "numBaseGlyphRecords",
@@ -69,4 +42,31 @@ function makeColrTable(
   ]);
 }
 
-export default { parse: parseColrTable, make: makeColrTable };
+export function parse(data, start) {
+  const p = new Parser(data, start);
+  const version = p.parseUShort();
+  check.argument(version === 0x0000, "Only COLRv0 supported.");
+  const numBaseGlyphRecords = p.parseUShort();
+  const baseGlyphRecordsOffset = p.parseOffset32();
+  const layerRecordsOffset = p.parseOffset32();
+  const numLayerRecords = p.parseUShort();
+  p.relativeOffset = baseGlyphRecordsOffset;
+  const baseGlyphRecords = p.parseRecordList(numBaseGlyphRecords, {
+    glyphID: Parser.uShort,
+    firstLayerIndex: Parser.uShort,
+    numLayers: Parser.uShort,
+  });
+  p.relativeOffset = layerRecordsOffset;
+  const layerRecords = p.parseRecordList(numLayerRecords, {
+    glyphID: Parser.uShort,
+    paletteIndex: Parser.uShort,
+  });
+
+  return {
+    version,
+    baseGlyphRecords,
+    layerRecords,
+  };
+}
+
+export default { make, parse };

@@ -1,9 +1,10 @@
 // The `STAT` table stores information on design attributes for font-style variants
 // https://learn.microsoft.com/en-us/typography/opentype/spec/STAT
 
-import check from "../check.js";
-import { default as parse, Parser } from "../parse.js";
-import table from "../table.js";
+import * as check from "../check.js";
+import { Parser } from "../parse.js";
+import { Record, Table } from "../table.js";
+import { log } from "../util.js";
 
 const axisRecordStruct = {
   tag: Parser.tag,
@@ -68,81 +69,13 @@ function parseSTATAxisValue() {
     format: valueTableFormat,
   };
   if (axisValueParser === undefined) {
-    console.warn(`Unknown axis value table format ${valueTableFormat}`);
+    log.warn(`Unknown axis value table format ${valueTableFormat}`);
     return formatStub;
   }
   return Object.assign(
     formatStub,
     this.parseStruct(axisValueParser.bind(this)),
   );
-}
-
-function parseSTATTable(data, start, fvar) {
-  if (!start) {
-    start = 0;
-  }
-
-  const p = new parse.Parser(data, start);
-  const tableVersionMajor = p.parseUShort();
-  const tableVersionMinor = p.parseUShort();
-
-  if (tableVersionMajor !== 1) {
-    console.warn(
-      `Unsupported STAT table version ${tableVersionMajor}.${tableVersionMinor}`,
-    );
-  }
-  const version = [
-    tableVersionMajor,
-    tableVersionMinor,
-  ];
-
-  const designAxisSize = p.parseUShort();
-  const designAxisCount = p.parseUShort();
-  const designAxesOffset = p.parseOffset32();
-  const axisValueCount = p.parseUShort();
-  const offsetToAxisValueOffsets = p.parseOffset32();
-  const elidedFallbackNameID = (tableVersionMajor > 1 || tableVersionMinor > 0)
-    ? p.parseUShort()
-    : undefined;
-
-  if (fvar !== undefined) {
-    check.argument(
-      designAxisCount >= fvar.axes.length,
-      "STAT axis count must be greater than or equal to fvar axis count",
-    );
-  }
-
-  if (axisValueCount > 0) {
-    check.argument(
-      designAxisCount >= 0,
-      "STAT axis count must be greater than 0 if STAT axis value count is greater than 0",
-    );
-  }
-
-  const axes = [];
-  for (let i = 0; i < designAxisCount; i++) {
-    p.offset = start + designAxesOffset;
-    p.relativeOffset = i * designAxisSize;
-    axes.push(p.parseStruct(axisRecordStruct));
-  }
-
-  p.offset = start;
-  p.relativeOffset = offsetToAxisValueOffsets;
-
-  const valueOffsets = p.parseUShortList(axisValueCount);
-  const values = [];
-  for (let i = 0; i < axisValueCount; i++) {
-    p.offset = start + offsetToAxisValueOffsets;
-    p.relativeOffset = valueOffsets[i];
-    values.push(parseSTATAxisValue.apply(p));
-  }
-
-  return {
-    version,
-    axes,
-    values,
-    elidedFallbackNameID,
-  };
 }
 
 const axisValueMakers = new Array(5);
@@ -211,7 +144,7 @@ axisValueMakers[4] = function axisValueMaker4(n, table) {
 };
 
 function makeSTATAxisRecord(n, axis) {
-  return new table.Record("axisRecord_" + n, [
+  return new Record("axisRecord_" + n, [
     { name: "axisTag_" + n, type: "TAG", value: axis.tag },
     { name: "axisNameID_" + n, type: "USHORT", value: axis.nameID },
     { name: "axisOrdering_" + n, type: "USHORT", value: axis.ordering },
@@ -226,11 +159,11 @@ function makeSTATValueTable(n, tableData) {
     `Unknown axis value table format ${valueTableFormat}`,
   );
   const fields = axisValueMaker(n, tableData);
-  return new table.Table("axisValueTable_" + n, fields);
+  return new Table("axisValueTable_" + n, fields);
 }
 
-function makeSTATTable(STAT) {
-  const result = new table.Table("STAT", [
+export function make(STAT) {
+  const result = new Table("STAT", [
     { name: "majorVersion", type: "USHORT", value: 1 },
     { name: "minorVersion", type: "USHORT", value: 2 },
     { name: "designAxisSize", type: "USHORT", value: 8 },
@@ -274,4 +207,70 @@ function makeSTATTable(STAT) {
   return result;
 }
 
-export default { make: makeSTATTable, parse: parseSTATTable };
+export function parse(data, start, fvar) {
+  if (!start) start = 0;
+
+  const p = new Parser(data, start);
+  const tableVersionMajor = p.parseUShort();
+  const tableVersionMinor = p.parseUShort();
+
+  if (tableVersionMajor !== 1) {
+    log.warn(
+      `Unsupported STAT table version ${tableVersionMajor}.${tableVersionMinor}`,
+    );
+  }
+  const version = [
+    tableVersionMajor,
+    tableVersionMinor,
+  ];
+
+  const designAxisSize = p.parseUShort();
+  const designAxisCount = p.parseUShort();
+  const designAxesOffset = p.parseOffset32();
+  const axisValueCount = p.parseUShort();
+  const offsetToAxisValueOffsets = p.parseOffset32();
+  const elidedFallbackNameID = (tableVersionMajor > 1 || tableVersionMinor > 0)
+    ? p.parseUShort()
+    : undefined;
+
+  if (fvar !== undefined) {
+    check.argument(
+      designAxisCount >= fvar.axes.length,
+      "STAT axis count must be greater than or equal to fvar axis count",
+    );
+  }
+
+  if (axisValueCount > 0) {
+    check.argument(
+      designAxisCount >= 0,
+      "STAT axis count must be greater than 0 if STAT axis value count is greater than 0",
+    );
+  }
+
+  const axes = [];
+  for (let i = 0; i < designAxisCount; i++) {
+    p.offset = start + designAxesOffset;
+    p.relativeOffset = i * designAxisSize;
+    axes.push(p.parseStruct(axisRecordStruct));
+  }
+
+  p.offset = start;
+  p.relativeOffset = offsetToAxisValueOffsets;
+
+  const valueOffsets = p.parseUShortList(axisValueCount);
+  const values = [];
+  for (let i = 0; i < axisValueCount; i++) {
+    p.offset = start + offsetToAxisValueOffsets;
+    p.relativeOffset = valueOffsets[i];
+    values.push(parseSTATAxisValue.apply(p));
+  }
+
+  return {
+    version,
+    axes,
+    values,
+    elidedFallbackNameID,
+  };
+}
+
+export default { make, parse };

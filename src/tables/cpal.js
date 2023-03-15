@@ -4,29 +4,10 @@
 // https://www.microsoft.com/typography/OTSPEC/cpal.htm
 
 import { Parser } from "../parse.js";
-import check from "../check.js";
-import table from "../table.js";
+import * as check from "../check.js";
+import { Table } from "../table.js";
 
-// Parse the header `head` table
-function parseCpalTable(data, start) {
-  const p = new Parser(data, start);
-  const version = p.parseShort();
-  const numPaletteEntries = p.parseShort();
-  const numPalettes = p.parseShort();
-  const numColorRecords = p.parseShort();
-  const colorRecordsArrayOffset = p.parseOffset32();
-  const colorRecordIndices = p.parseUShortList(numPalettes);
-  p.relativeOffset = colorRecordsArrayOffset;
-  const colorRecords = p.parseULongList(numColorRecords);
-  return {
-    version,
-    numPaletteEntries,
-    colorRecords,
-    colorRecordIndices,
-  };
-}
-
-function makeCpalTable(
+export function make(
   {
     version = 0,
     numPaletteEntries = 0,
@@ -43,7 +24,7 @@ function makeCpalTable(
       "Can't infer numPaletteEntries on multiple colorRecordIndices",
     );
   }
-  return new table.Table("CPAL", [
+  return new Table("CPAL", [
     { name: "version", type: "USHORT", value: version },
     {
       name: "numPaletteEntries",
@@ -70,4 +51,23 @@ function makeCpalTable(
   ]);
 }
 
-export default { parse: parseCpalTable, make: makeCpalTable };
+// Parse the header `head` table
+export function parse(data, start) {
+  const p = new Parser(data, start);
+  const version = p.parseShort();
+  const numPaletteEntries = p.parseShort();
+  const numPalettes = p.parseShort();
+  const numColorRecords = p.parseShort();
+  const colorRecordsArrayOffset = p.parseOffset32();
+  const colorRecordIndices = p.parseUShortList(numPalettes);
+  p.relativeOffset = colorRecordsArrayOffset;
+  const colorRecords = p.parseULongList(numColorRecords);
+  return {
+    version,
+    numPaletteEntries,
+    colorRecords,
+    colorRecordIndices,
+  };
+}
+
+export default { make, parse };

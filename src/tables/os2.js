@@ -1,10 +1,10 @@
 // The `OS/2` table contains metrics required in OpenType fonts.
 // https://www.microsoft.com/typography/OTSPEC/os2.htm
 
-import parse from "../parse.js";
-import table from "../table.js";
+import { Parser } from "../parse.js";
+import { Table } from "../table.js";
 
-const unicodeRanges = [
+export const unicodeRanges = [
   { begin: 0x0000, end: 0x007F }, // Basic Latin
   { begin: 0x0080, end: 0x00FF }, // Latin-1 Supplement
   { begin: 0x0100, end: 0x017F }, // Latin Extended-A
@@ -130,7 +130,7 @@ const unicodeRanges = [
   { begin: 0x1F030, end: 0x1F09F }, // Domino Tiles
 ];
 
-function getUnicodeRange(unicode) {
+export function getUnicodeRange(unicode) {
   for (let i = 0; i < unicodeRanges.length; i += 1) {
     const range = unicodeRanges[i];
     if (unicode >= range.begin && unicode < range.end) {
@@ -141,10 +141,12 @@ function getUnicodeRange(unicode) {
   return -1;
 }
 
-// Parse the OS/2 and Windows metrics `OS/2` table
-function parseOS2Table(data, start) {
+/**
+ * Parse the OS/2 and Windows metrics `OS/2` table
+ */
+export function parse(data, start) {
   const os2 = {};
-  const p = new parse.Parser(data, start);
+  const p = new Parser(data, start);
   os2.version = p.parseUShort();
   os2.xAvgCharWidth = p.parseShort();
   os2.usWeightClass = p.parseUShort();
@@ -200,8 +202,8 @@ function parseOS2Table(data, start) {
   return os2;
 }
 
-function makeOS2Table(options) {
-  return new table.Table("OS/2", [
+export function make(options) {
+  return new Table("OS/2", [
     { name: "version", type: "USHORT", value: 0x0003 },
     { name: "xAvgCharWidth", type: "SHORT", value: 0 },
     { name: "usWeightClass", type: "USHORT", value: 0 },
@@ -252,8 +254,8 @@ function makeOS2Table(options) {
 }
 
 export default {
-  parse: parseOS2Table,
-  make: makeOS2Table,
+  parse,
+  make,
   unicodeRanges,
   getUnicodeRange,
 };
