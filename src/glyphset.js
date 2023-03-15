@@ -1,22 +1,5 @@
 // The GlyphSet object
-
-import Glyph from "./glyph.js";
-
-// Define a property on the glyph that depends on the path being loaded.
-function defineDependentProperty(glyph, externalName, internalName) {
-  Object.defineProperty(glyph, externalName, {
-    get: function () {
-      // Request the path property to make sure the path is loaded.
-      glyph.path; // jshint ignore:line
-      return glyph[internalName];
-    },
-    set: function (newValue) {
-      glyph[internalName] = newValue;
-    },
-    enumerable: true,
-    configurable: true,
-  });
-}
+import { Glyph } from "./glyph.js";
 
 /**
  * A GlyphSet represents all glyphs available in the font, but modelled using
@@ -28,6 +11,33 @@ function defineDependentProperty(glyph, externalName, internalName) {
  * @param {Array}
  */
 export class GlyphSet {
+  /**
+   * Load a glyph from a TTF font.
+   *
+   * @see {@link ttfGlyphLoader} for the parameters and more details.
+   */
+  static fromTTF(font, index, parseGlyph, data, position, buildPath) {
+    return ttfGlyphLoader(...Array.from(arguments));
+  }
+
+  /**
+   * Load a glyph from a CFF font.
+   * @see {@link cffGlyphLoader} for the parameters and more details.
+   */
+  static fromCFF(font, index, parseGlyph, data, position, buildPath) {
+    return cffGlyphLoader(...Array.from(arguments));
+  }
+
+  /**
+   * @see {@link opentype.glyphLoader}
+   * @param  {opentype.Font} font
+   * @param  {number} index
+   * @return {opentype.Glyph}
+   */
+  static from(font, index) {
+    return new Glyph({ index: index, font: font });
+  }
+
   constructor(font, glyphs) {
     this.font = font;
     this.glyphs = {};
@@ -100,7 +110,7 @@ export class GlyphSet {
  * @param  {number} index
  * @return {opentype.Glyph}
  */
-function glyphLoader(font, index) {
+export function glyphLoader(font, index) {
   return new Glyph({ index: index, font: font });
 }
 
@@ -117,7 +127,14 @@ function glyphLoader(font, index) {
  * @param  {Function} buildPath
  * @return {opentype.Glyph}
  */
-function ttfGlyphLoader(font, index, parseGlyph, data, position, buildPath) {
+export function ttfGlyphLoader(
+  font,
+  index,
+  parseGlyph,
+  data,
+  position,
+  buildPath,
+) {
   return function () {
     const glyph = new Glyph({ index: index, font: font });
 
@@ -136,6 +153,7 @@ function ttfGlyphLoader(font, index, parseGlyph, data, position, buildPath) {
     return glyph;
   };
 }
+
 /**
  * @alias opentype.cffGlyphLoader
  * @param  {opentype.Font} font
@@ -144,7 +162,7 @@ function ttfGlyphLoader(font, index, parseGlyph, data, position, buildPath) {
  * @param  {string} charstring
  * @return {opentype.Glyph}
  */
-function cffGlyphLoader(font, index, parseCFFCharstring, charstring) {
+export function cffGlyphLoader(font, index, parseCFFCharstring, charstring) {
   return function () {
     const glyph = new Glyph({ index: index, font: font });
 
@@ -156,6 +174,22 @@ function cffGlyphLoader(font, index, parseCFFCharstring, charstring) {
 
     return glyph;
   };
+}
+
+// Define a property on the glyph that depends on the path being loaded.
+function defineDependentProperty(glyph, externalName, internalName) {
+  Object.defineProperty(glyph, externalName, {
+    get: function () {
+      // Request the path property to make sure the path is loaded.
+      glyph.path; // jshint ignore:line
+      return glyph[internalName];
+    },
+    set: function (newValue) {
+      glyph[internalName] = newValue;
+    },
+    enumerable: true,
+    configurable: true,
+  });
 }
 
 export default { GlyphSet, glyphLoader, ttfGlyphLoader, cffGlyphLoader };

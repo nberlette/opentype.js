@@ -6,30 +6,480 @@ import { ContextParams } from "../tokenizer.js";
 import { isTashkeelArabicChar } from "../char.js";
 
 /**
- * Create feature query instance
- * @param {Font} font opentype font instance
+ * [ LOOKUP TYPES ]
+ * -------------------------------
+ * Single                        1;
+ * Multiple                      2;
+ * Alternate                     3;
+ * Ligature                      4;
+ * Context                       5;
+ * ChainingContext               6;
+ * ExtensionSubstitution         7;
+ * ReverseChainingContext        8;
+ * -------------------------------
+ * @typedef {{
+ *   readonly SINGLE: 1,
+ *   readonly MULTIPLE: 2,
+ *   readonly ALTERNATE: 3,
+ *   readonly LIGATURE: 4,
+ *   readonly CONTEXT: 5,
+ *   readonly CHAINING_CONTEXT: 6,
+ *   readonly EXTENSION_SUBSTITUTION: 7,
+ *   readonly REVERSE_CHAINING_CONTEXT: 8,
+ *   readonly 1: "Single",
+ *   readonly 2: "Multiple",
+ *   readonly 3: "Alternate",
+ *   readonly 4: "Ligature",
+ *   readonly 5: "Context",
+ *   readonly 6: "ChainingContext",
+ *   readonly 7: "ExtensionSubstitution",
+ *   readonly 8: "ReverseChainingContext",
+ * }} LookupType
+ *
+ * @type {LookupType}
+ * @readonly
  */
-function FeatureQuery(font) {
-  this.font = font;
-  this.features = {};
+export const LOOKUP = {
+  /** @member {1} Single */
+  SINGLE: 1,
+  /** @member {2} Multiple */
+  MULTIPLE: 2,
+  /** @member {3} Alternate */
+  ALTERNATE: 3,
+  /** @member {4} Ligature */
+  LIGATURE: 4,
+  /** @member {5} Context */
+  CONTEXT: 5,
+  /** @member {6} ChainingContext */
+  CHAINING_CONTEXT: 6,
+  /** @member {7} ExtensionSubstitution */
+  EXTENSION_SUBSTITUTION: 7,
+  /** @member {8} ReverseChainingContext */
+  REVERSE_CHAINING_CONTEXT: 8,
+  /** @member {"Single"} 1 */
+  1: "Single",
+  /** @member {"Multiple"} 2 */
+  2: "Multiple",
+  /** @member {"Alternate"} 3 */
+  3: "Alternate",
+  /** @member {"Ligature"} 4 */
+  4: "Ligature",
+  /** @member {"Context"} 5 */
+  5: "Context",
+  /** @member {"ChainingContext"} 6 */
+  6: "ChainingContext",
+  /** @member {"ExtensionSubstitution"} 7 */
+  7: "ExtensionSubstitution",
+  /** @member {"ReverseChainingContext"} 8 */
+  8: "ReverseChainingContext",
+};
+
+export class FeatureQuery {
+  /**
+   * Create feature query instance
+   * @param {Font} font opentype font instance
+   */
+  constructor(font) {
+    this.font = font;
+    this.features = {};
+  }
+
+  /**
+   * Get default script features indexes
+   */
+  getDefaultScriptFeaturesIndexes() {
+    const scripts = this.font.tables.gsub.scripts;
+
+    for (let s = 0; s < scripts.length; s++) {
+      const script = scripts[s];
+
+      if (script.tag === "DFLT") {
+        return (
+          script.script.defaultLangSys.featureIndexes
+        );
+      }
+    }
+    return [];
+  }
+
+  /**
+   * Get feature indexes of a specific script
+   * @param {string} scriptTag script tag
+   */
+  getScriptFeaturesIndexes(scriptTag) {
+    const tables = this.font.tables;
+    if (!tables.gsub) return [];
+    if (!scriptTag) return this.getDefaultScriptFeaturesIndexes();
+    const scripts = this.font.tables.gsub.scripts;
+
+    for (let i = 0; i < scripts.length; i++) {
+      const script = scripts[i];
+
+      if (script.tag === scriptTag && script.script.defaultLangSys) {
+        return script.script.defaultLangSys.featureIndexes;
+      } else {
+        let langSysRecords = script.langSysRecords;
+
+        if (langSysRecords) {
+          for (let j = 0; j < langSysRecords.length; j++) {
+            const langSysRecord = langSysRecords[j];
+
+            if (langSysRecord.tag === scriptTag) {
+              let langSys = langSysRecord.langSys;
+              return langSys.featureIndexes;
+            }
+          }
+        }
+      }
+    }
+
+    return this.getDefaultScriptFeaturesIndexes();
+  }
+
+  /**
+   * Map a feature tag to a gsub feature
+   * @param {any} features gsub features
+   * @param {string} scriptTag script tag
+   */
+  mapTagsToFeatures(features, scriptTag) {
+    let tags = {};
+    for (let i = 0; i < features.length; i++) {
+      const tag = features[i].tag;
+      const feature = features[i].feature;
+      tags[tag] = feature;
+    }
+    this.features[scriptTag].tags = tags;
+  }
+
+  /**
+   * Get features of a specific script
+   * @param {string} scriptTag script tag
+   */
+  getScriptFeatures(scriptTag) {
+    let features = this.features[scriptTag];
+
+    if (Object.prototype.hasOwnProperty.call(this.features, scriptTag)) {
+      return features;
+    }
+
+    const featuresIndexes = this.getScriptFeaturesIndexes(scriptTag);
+    if (!featuresIndexes) {
+      return null;
+    }
+
+    const gsub = this.font.tables.gsub;
+    features = featuresIndexes.map((index) => gsub.features[index]);
+    this.features[scriptTag] = features;
+    this.mapTagsToFeatures(features, scriptTag);
+    return features;
+  }
+
+  /**
+   * Get substitution type
+   * @param {any} lookupTable lookup table
+   * @param {any} subtable subtable
+   */
+  getSubstitutionType(lookupTable, subtable) {
+    const lookupType = lookupTable.lookupType.toString();
+    const substFormat = subtable.substFormat.toString();
+    return lookupType + substFormat;
+  }
+
+  /**
+   * Get lookup method
+   * @param {any} lookupTable lookup table
+   * @param {any} subtable subtable
+   */
+  getLookupMethod(lookupTable, subtable) {
+    let substitutionType = this.getSubstitutionType(lookupTable, subtable);
+    switch (substitutionType) {
+      case "11":
+        return (glyphIndex) =>
+          singleSubstitutionFormat1.apply(
+            this,
+            [glyphIndex, subtable],
+          );
+      case "12":
+        return (glyphIndex) =>
+          singleSubstitutionFormat2.apply(
+            this,
+            [glyphIndex, subtable],
+          );
+      case "63":
+        return (contextParams) =>
+          chainingSubstitutionFormat3.apply(
+            this,
+            [contextParams, subtable],
+          );
+      case "41":
+        return (contextParams) =>
+          ligatureSubstitutionFormat1.apply(
+            this,
+            [contextParams, subtable],
+          );
+      case "21":
+        return (glyphIndex) =>
+          decompositionSubstitutionFormat1.apply(
+            this,
+            [glyphIndex, subtable],
+          );
+      default:
+        throw new Error(
+          `lookupType: ${lookupTable.lookupType} - ` +
+            `substFormat: ${subtable.substFormat} ` +
+            "is not yet supported",
+        );
+    }
+  }
+
+  /**
+   * [ LOOKUP TYPES ]
+   * -------------------------------
+   * Single                        1;
+   * Multiple                      2;
+   * Alternate                     3;
+   * Ligature                      4;
+   * Context                       5;
+   * ChainingContext               6;
+   * ExtensionSubstitution         7;
+   * ReverseChainingContext        8;
+   * -------------------------------
+   */
+
+  /**
+   * @typedef {Object} FQuery
+   * @property {string} tag Feature tag (e.g. 'liga')
+   * @property {string} script Feature script (e.g. 'Latin')
+   * @property {ContextParams} contextParams Feature-bound instance of {@link ContextParams}
+   */
+
+  /**
+   * Lookup a feature using a query parameters
+   * @param {FQuery} query feature query
+   */
+  lookupFeature(query) {
+    let contextParams = query.contextParams;
+    let currentIndex = contextParams.index;
+
+    const feature = this.getFeature({
+      tag: query.tag,
+      script: query.script,
+    });
+
+    if (!feature) {
+      return new Error(
+        `font '${
+          (this.font.names.unicode || this.font.names.windows ||
+            this.font.names.macintosh).fullName.en
+        }' ` +
+          `doesn't support feature '${query.tag}' ` +
+          `for script '${query.script}'.`,
+      );
+    }
+
+    const lookups = this.getFeatureLookups(feature);
+    const substitutions = [].concat(contextParams.context);
+
+    for (let l = 0; l < lookups.length; l++) {
+      const lookupTable = lookups[l];
+      const subtables = this.getLookupSubtables(lookupTable);
+
+      for (let s = 0; s < subtables.length; s++) {
+        let subtable = subtables[s];
+        let substType = this.getSubstitutionType(lookupTable, subtable);
+        let lookup;
+
+        if (substType === "71") {
+          // This is an extension subtable, so lookup the target subtable
+          substType = this.getSubstitutionType(subtable, subtable.extension);
+          lookup = this.getLookupMethod(subtable, subtable.extension);
+          subtable = subtable.extension;
+        } else {
+          lookup = this.getLookupMethod(lookupTable, subtable);
+        }
+
+        let substitution;
+        switch (substType) {
+          case "11":
+            substitution = lookup(contextParams.current);
+            if (substitution) {
+              substitutions.splice(
+                currentIndex,
+                1,
+                new SubstitutionAction({
+                  id: 11,
+                  tag: query.tag,
+                  substitution,
+                }),
+              );
+            }
+            break;
+          case "12":
+            substitution = lookup(contextParams.current);
+            if (substitution) {
+              substitutions.splice(
+                currentIndex,
+                1,
+                new SubstitutionAction({
+                  id: 12,
+                  tag: query.tag,
+                  substitution,
+                }),
+              );
+            }
+            break;
+          case "63":
+            substitution = lookup(contextParams);
+            if (Array.isArray(substitution) && substitution.length) {
+              substitutions.splice(
+                currentIndex,
+                1,
+                new SubstitutionAction({
+                  id: 63,
+                  tag: query.tag,
+                  substitution,
+                }),
+              );
+            }
+            break;
+          case "41":
+            substitution = lookup(contextParams);
+            if (substitution) {
+              substitutions.splice(
+                currentIndex,
+                1,
+                new SubstitutionAction({
+                  id: 41,
+                  tag: query.tag,
+                  substitution,
+                }),
+              );
+            }
+            break;
+          case "21":
+            substitution = lookup(contextParams.current);
+            if (substitution) {
+              substitutions.splice(
+                currentIndex,
+                1,
+                new SubstitutionAction({
+                  id: 21,
+                  tag: query.tag,
+                  substitution,
+                }),
+              );
+            }
+            break;
+        }
+        contextParams = new ContextParams(substitutions, currentIndex);
+
+        if (Array.isArray(substitution) && !substitution.length) continue;
+        substitution = null;
+      }
+    }
+    return substitutions.length ? substitutions : null;
+  }
+
+  /**
+   * Checks if a font supports a specific features
+   * @param {FQuery} query feature query object
+   */
+  supports(query) {
+    if (!query.script) return false;
+    this.getScriptFeatures(query.script);
+
+    const supportedScript = Object.prototype.hasOwnProperty.call(
+      this.features,
+      query.script,
+    );
+
+    if (!query.tag) return supportedScript;
+
+    const supportedFeature = this.features[query.script].some((feature) =>
+      feature.tag === query.tag
+    );
+
+    return supportedScript && supportedFeature;
+  }
+
+  /**
+   * Get lookup table subtables
+   * @param {any} lookupTable lookup table
+   */
+  getLookupSubtables(lookupTable) {
+    return lookupTable.subtables || null;
+  }
+
+  /**
+   * Get lookup table by index
+   * @param {number} index lookup table index
+   */
+  getLookupByIndex(index) {
+    const lookups = this.font.tables.gsub.lookups;
+    return lookups[index] || null;
+  }
+
+  /**
+   * Get lookup tables for a feature
+   * @param {string} feature
+   */
+  getFeatureLookups(feature) {
+    // TODO: memoize
+    return feature.lookupListIndexes.map(this.getLookupByIndex.bind(this));
+  }
+
+  /**
+   * Query a feature by it's properties
+   * @param {any} query an object that describes the properties of a query
+   */
+  getFeature(query) {
+    if (!this.font) return { FAIL: "No font was found" };
+    if (!Object.prototype.hasOwnProperty.call(this.features, query.script)) {
+      this.getScriptFeatures(query.script);
+    }
+
+    const scriptFeatures = this.features[query.script];
+    if (!scriptFeatures) {
+      return (
+        { FAIL: `No feature for script ${query.script}` }
+      );
+    }
+
+    if (!scriptFeatures.tags[query.tag]) return null;
+    return this.features[query.script].tags[query.tag];
+  }
 }
 
 /**
- * @typedef SubstitutionAction
- * @type Object
+ * @typedef {Object} SubstitutionActionInit
  * @property {number} id substitution type
  * @property {string} tag feature tag
  * @property {any} substitution substitution value(s)
+ * @property {number} [index] substitution index
+ * @property {number} [length] substitution length
+ * @property {number} [offset] substitution offset
+ * @property {number} [count] substitution count
+ * @property {number} [glyphIndex] substitution glyph index
+ * @property {number} [glyphCount] substitution glyph count
+ * @property {number} [glyphOffset] substitution glyph offset
  */
 
-/**
- * Create a substitution action instance
- * @param {SubstitutionAction} action
- */
-function SubstitutionAction(action) {
-  this.id = action.id;
-  this.tag = action.tag;
-  this.substitution = action.substitution;
+export class SubstitutionAction {
+  /** @type {number} substitution type */
+  id;
+  /** @type {string} feature tag */
+  tag;
+  /** @type {any} substitution value(s) */
+  substitution;
+  /**
+   * Creates an instance of SubstitutionAction.
+   * @param {SubstitutionActionInit} action
+   */
+  constructor(action) {
+    this.id = action.id;
+    this.tag = action.tag;
+    this.substitution = action.substitution;
+  }
 }
 
 /**
@@ -87,15 +537,18 @@ function singleSubstitutionFormat2(glyphIndex, subtable) {
  */
 function lookupCoverageList(coverageList, contextParams) {
   let lookupList = [];
+
   for (let i = 0; i < coverageList.length; i++) {
     const coverage = coverageList[i];
     let glyphIndex = contextParams.current;
     glyphIndex = Array.isArray(glyphIndex) ? glyphIndex[0] : glyphIndex;
     const lookupIndex = lookupCoverage(glyphIndex, coverage);
+
     if (lookupIndex !== -1) {
       lookupList.push(lookupIndex);
     }
   }
+
   if (lookupList.length !== coverageList.length) return -1;
   return lookupList;
 }
@@ -109,52 +562,73 @@ function chainingSubstitutionFormat3(contextParams, subtable) {
     subtable.lookaheadCoverage.length +
     subtable.backtrackCoverage.length;
   if (contextParams.context.length < lookupsCount) return [];
+
   // INPUT LOOKUP //
   let inputLookups = lookupCoverageList(
     subtable.inputCoverage,
     contextParams,
   );
-  if (inputLookups === -1) return [];
+
+  if (inputLookups === -1) {
+    return [];
+  }
+
   // LOOKAHEAD LOOKUP //
   const lookaheadOffset = subtable.inputCoverage.length - 1;
+
   if (contextParams.lookahead.length < subtable.lookaheadCoverage.length) {
     return [];
   }
+
   let lookaheadContext = contextParams.lookahead.slice(lookaheadOffset);
+
   while (
     lookaheadContext.length && isTashkeelArabicChar(lookaheadContext[0].char)
   ) {
     lookaheadContext.shift();
   }
+
   const lookaheadParams = new ContextParams(lookaheadContext, 0);
   let lookaheadLookups = lookupCoverageList(
     subtable.lookaheadCoverage,
     lookaheadParams,
   );
+
   // BACKTRACK LOOKUP //
   let backtrackContext = [].concat(contextParams.backtrack);
   backtrackContext.reverse();
+
   while (
-    backtrackContext.length && isTashkeelArabicChar(backtrackContext[0].char)
+    backtrackContext.length &&
+    isTashkeelArabicChar(backtrackContext[0].char)
   ) {
     backtrackContext.shift();
   }
-  if (backtrackContext.length < subtable.backtrackCoverage.length) return [];
+
+  if (backtrackContext.length < subtable.backtrackCoverage.length) {
+    return [];
+  }
+
   const backtrackParams = new ContextParams(backtrackContext, 0);
+
   let backtrackLookups = lookupCoverageList(
     subtable.backtrackCoverage,
     backtrackParams,
   );
+
   const contextRulesMatch =
     inputLookups.length === subtable.inputCoverage.length &&
     lookaheadLookups.length === subtable.lookaheadCoverage.length &&
     backtrackLookups.length === subtable.backtrackCoverage.length;
+
   let substitutions = [];
+
   if (contextRulesMatch) {
     for (let i = 0; i < subtable.lookupRecords.length; i++) {
       const lookupRecord = subtable.lookupRecords[i];
       const lookupListIndex = lookupRecord.lookupListIndex;
       const lookupTable = this.getLookupByIndex(lookupListIndex);
+
       for (let s = 0; s < lookupTable.subtables.length; s++) {
         let subtable = lookupTable.subtables[s];
         let lookup;
@@ -198,15 +672,19 @@ function ligatureSubstitutionFormat1(contextParams, subtable) {
   let glyphIndex = contextParams.current;
   let ligSetIndex = lookupCoverage(glyphIndex, subtable.coverage);
   if (ligSetIndex === -1) return null;
+
   // COMPONENTS LOOKUP
   // (!) note, components are ordered in the written direction.
   let ligature;
   let ligatureSet = subtable.ligatureSets[ligSetIndex];
+
   for (let s = 0; s < ligatureSet.length; s++) {
     ligature = ligatureSet[s];
+
     for (let l = 0; l < ligature.components.length; l++) {
       const lookaheadItem = contextParams.lookahead[l];
       const component = ligature.components[l];
+
       if (lookaheadItem !== component) break;
       if (l === ligature.components.length - 1) return ligature;
     }
@@ -225,347 +703,4 @@ function decompositionSubstitutionFormat1(glyphIndex, subtable) {
   return subtable.sequences[substituteIndex];
 }
 
-/**
- * Get default script features indexes
- */
-FeatureQuery.prototype.getDefaultScriptFeaturesIndexes = function () {
-  const scripts = this.font.tables.gsub.scripts;
-  for (let s = 0; s < scripts.length; s++) {
-    const script = scripts[s];
-    if (script.tag === "DFLT") {
-      return (
-        script.script.defaultLangSys.featureIndexes
-      );
-    }
-  }
-  return [];
-};
-
-/**
- * Get feature indexes of a specific script
- * @param {string} scriptTag script tag
- */
-FeatureQuery.prototype.getScriptFeaturesIndexes = function (scriptTag) {
-  const tables = this.font.tables;
-  if (!tables.gsub) return [];
-  if (!scriptTag) return this.getDefaultScriptFeaturesIndexes();
-  const scripts = this.font.tables.gsub.scripts;
-  for (let i = 0; i < scripts.length; i++) {
-    const script = scripts[i];
-    if (script.tag === scriptTag && script.script.defaultLangSys) {
-      return script.script.defaultLangSys.featureIndexes;
-    } else {
-      let langSysRecords = script.langSysRecords;
-      if (langSysRecords) {
-        for (let j = 0; j < langSysRecords.length; j++) {
-          const langSysRecord = langSysRecords[j];
-          if (langSysRecord.tag === scriptTag) {
-            let langSys = langSysRecord.langSys;
-            return langSys.featureIndexes;
-          }
-        }
-      }
-    }
-  }
-  return this.getDefaultScriptFeaturesIndexes();
-};
-
-/**
- * Map a feature tag to a gsub feature
- * @param {any} features gsub features
- * @param {string} scriptTag script tag
- */
-FeatureQuery.prototype.mapTagsToFeatures = function (features, scriptTag) {
-  let tags = {};
-  for (let i = 0; i < features.length; i++) {
-    const tag = features[i].tag;
-    const feature = features[i].feature;
-    tags[tag] = feature;
-  }
-  this.features[scriptTag].tags = tags;
-};
-
-/**
- * Get features of a specific script
- * @param {string} scriptTag script tag
- */
-FeatureQuery.prototype.getScriptFeatures = function (scriptTag) {
-  let features = this.features[scriptTag];
-  if (Object.prototype.hasOwnProperty.call(this.features, scriptTag)) {
-    return features;
-  }
-  const featuresIndexes = this.getScriptFeaturesIndexes(scriptTag);
-  if (!featuresIndexes) return null;
-  const gsub = this.font.tables.gsub;
-  features = featuresIndexes.map((index) => gsub.features[index]);
-  this.features[scriptTag] = features;
-  this.mapTagsToFeatures(features, scriptTag);
-  return features;
-};
-
-/**
- * Get substitution type
- * @param {any} lookupTable lookup table
- * @param {any} subtable subtable
- */
-FeatureQuery.prototype.getSubstitutionType = function (lookupTable, subtable) {
-  const lookupType = lookupTable.lookupType.toString();
-  const substFormat = subtable.substFormat.toString();
-  return lookupType + substFormat;
-};
-
-/**
- * Get lookup method
- * @param {any} lookupTable lookup table
- * @param {any} subtable subtable
- */
-FeatureQuery.prototype.getLookupMethod = function (lookupTable, subtable) {
-  let substitutionType = this.getSubstitutionType(lookupTable, subtable);
-  switch (substitutionType) {
-    case "11":
-      return (glyphIndex) =>
-        singleSubstitutionFormat1.apply(
-          this,
-          [glyphIndex, subtable],
-        );
-    case "12":
-      return (glyphIndex) =>
-        singleSubstitutionFormat2.apply(
-          this,
-          [glyphIndex, subtable],
-        );
-    case "63":
-      return (contextParams) =>
-        chainingSubstitutionFormat3.apply(
-          this,
-          [contextParams, subtable],
-        );
-    case "41":
-      return (contextParams) =>
-        ligatureSubstitutionFormat1.apply(
-          this,
-          [contextParams, subtable],
-        );
-    case "21":
-      return (glyphIndex) =>
-        decompositionSubstitutionFormat1.apply(
-          this,
-          [glyphIndex, subtable],
-        );
-    default:
-      throw new Error(
-        `lookupType: ${lookupTable.lookupType} - ` +
-          `substFormat: ${subtable.substFormat} ` +
-          "is not yet supported",
-      );
-  }
-};
-
-/**
- * [ LOOKUP TYPES ]
- * -------------------------------
- * Single                        1;
- * Multiple                      2;
- * Alternate                     3;
- * Ligature                      4;
- * Context                       5;
- * ChainingContext               6;
- * ExtensionSubstitution         7;
- * ReverseChainingContext        8;
- * -------------------------------
- */
-
-/**
- * @typedef FQuery
- * @type Object
- * @param {string} tag feature tag
- * @param {string} script feature script
- * @param {ContextParams} contextParams context params
- */
-
-/**
- * Lookup a feature using a query parameters
- * @param {FQuery} query feature query
- */
-FeatureQuery.prototype.lookupFeature = function (query) {
-  let contextParams = query.contextParams;
-  let currentIndex = contextParams.index;
-  const feature = this.getFeature({
-    tag: query.tag,
-    script: query.script,
-  });
-  if (!feature) {
-    return new Error(
-      `font '${
-        (this.font.names.unicode || this.font.names.windows ||
-          this.font.names.macintosh).fullName.en
-      }' ` +
-        `doesn't support feature '${query.tag}' ` +
-        `for script '${query.script}'.`,
-    );
-  }
-  const lookups = this.getFeatureLookups(feature);
-  const substitutions = [].concat(contextParams.context);
-  for (let l = 0; l < lookups.length; l++) {
-    const lookupTable = lookups[l];
-    const subtables = this.getLookupSubtables(lookupTable);
-    for (let s = 0; s < subtables.length; s++) {
-      let subtable = subtables[s];
-      let substType = this.getSubstitutionType(lookupTable, subtable);
-      let lookup;
-
-      if (substType === "71") {
-        // This is an extension subtable, so lookup the target subtable
-        substType = this.getSubstitutionType(subtable, subtable.extension);
-        lookup = this.getLookupMethod(subtable, subtable.extension);
-        subtable = subtable.extension;
-      } else {
-        lookup = this.getLookupMethod(lookupTable, subtable);
-      }
-
-      let substitution;
-      switch (substType) {
-        case "11":
-          substitution = lookup(contextParams.current);
-          if (substitution) {
-            substitutions.splice(
-              currentIndex,
-              1,
-              new SubstitutionAction({
-                id: 11,
-                tag: query.tag,
-                substitution,
-              }),
-            );
-          }
-          break;
-        case "12":
-          substitution = lookup(contextParams.current);
-          if (substitution) {
-            substitutions.splice(
-              currentIndex,
-              1,
-              new SubstitutionAction({
-                id: 12,
-                tag: query.tag,
-                substitution,
-              }),
-            );
-          }
-          break;
-        case "63":
-          substitution = lookup(contextParams);
-          if (Array.isArray(substitution) && substitution.length) {
-            substitutions.splice(
-              currentIndex,
-              1,
-              new SubstitutionAction({
-                id: 63,
-                tag: query.tag,
-                substitution,
-              }),
-            );
-          }
-          break;
-        case "41":
-          substitution = lookup(contextParams);
-          if (substitution) {
-            substitutions.splice(
-              currentIndex,
-              1,
-              new SubstitutionAction({
-                id: 41,
-                tag: query.tag,
-                substitution,
-              }),
-            );
-          }
-          break;
-        case "21":
-          substitution = lookup(contextParams.current);
-          if (substitution) {
-            substitutions.splice(
-              currentIndex,
-              1,
-              new SubstitutionAction({
-                id: 21,
-                tag: query.tag,
-                substitution,
-              }),
-            );
-          }
-          break;
-      }
-      contextParams = new ContextParams(substitutions, currentIndex);
-      if (Array.isArray(substitution) && !substitution.length) continue;
-      substitution = null;
-    }
-  }
-  return substitutions.length ? substitutions : null;
-};
-
-/**
- * Checks if a font supports a specific features
- * @param {FQuery} query feature query object
- */
-FeatureQuery.prototype.supports = function (query) {
-  if (!query.script) return false;
-  this.getScriptFeatures(query.script);
-  const supportedScript = Object.prototype.hasOwnProperty.call(
-    this.features,
-    query.script,
-  );
-  if (!query.tag) return supportedScript;
-  const supportedFeature = this.features[query.script].some((feature) =>
-    feature.tag === query.tag
-  );
-  return supportedScript && supportedFeature;
-};
-
-/**
- * Get lookup table subtables
- * @param {any} lookupTable lookup table
- */
-FeatureQuery.prototype.getLookupSubtables = function (lookupTable) {
-  return lookupTable.subtables || null;
-};
-
-/**
- * Get lookup table by index
- * @param {number} index lookup table index
- */
-FeatureQuery.prototype.getLookupByIndex = function (index) {
-  const lookups = this.font.tables.gsub.lookups;
-  return lookups[index] || null;
-};
-
-/**
- * Get lookup tables for a feature
- * @param {string} feature
- */
-FeatureQuery.prototype.getFeatureLookups = function (feature) {
-  // TODO: memoize
-  return feature.lookupListIndexes.map(this.getLookupByIndex.bind(this));
-};
-
-/**
- * Query a feature by it's properties
- * @param {any} query an object that describes the properties of a query
- */
-FeatureQuery.prototype.getFeature = function getFeature(query) {
-  if (!this.font) return { FAIL: "No font was found" };
-  if (!Object.prototype.hasOwnProperty.call(this.features, query.script)) {
-    this.getScriptFeatures(query.script);
-  }
-  const scriptFeatures = this.features[query.script];
-  if (!scriptFeatures) {
-    return (
-      { FAIL: `No feature for script ${query.script}` }
-    );
-  }
-  if (!scriptFeatures.tags[query.tag]) return null;
-  return this.features[query.script].tags[query.tag];
-};
-
 export default FeatureQuery;
-export { FeatureQuery, SubstitutionAction };

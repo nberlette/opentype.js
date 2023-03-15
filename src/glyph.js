@@ -1,28 +1,8 @@
 // The Glyph object
 
-import check from "./check.js";
-import draw from "./draw.js";
-import Path from "./path.js";
-// import glyf from './tables/glyf' Can't be imported here, because it's a circular dependency
-
-function getPathDefinition(glyph, path) {
-  let _path = path || new Path();
-  return {
-    configurable: true,
-
-    get: function () {
-      if (typeof _path === "function") {
-        _path = _path();
-      }
-
-      return _path;
-    },
-
-    set: function (p) {
-      _path = p;
-    },
-  };
-}
+import * as check from "./check.js";
+import * as draw from "./draw.js";
+import { Path } from "./path.js";
 
 /**
  * @typedef {Object} GlyphOptions
@@ -414,6 +394,26 @@ export class Glyph {
       10000,
     );
   }
+}
+
+function getPathDefinition(_glyph, path) {
+  path ||= new Path();
+
+  return {
+    configurable: true,
+
+    get: function () {
+      if (typeof path === "function") {
+        path = path();
+      }
+
+      return path;
+    },
+
+    set: function (p) {
+      path = p;
+    },
+  };
 }
 
 export default Glyph;

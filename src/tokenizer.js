@@ -9,7 +9,7 @@
  * @param {string} char a single char
  */
 export class Token {
-  constructor (char) {
+  constructor(char) {
     this.char = char;
     this.state = {};
     this.activeState = null;
@@ -86,7 +86,7 @@ export class Event {
     });
   }
 
-  constructor (eventId) {
+  constructor(eventId) {
     this.eventId = eventId;
     this.subscribers = [];
   }
@@ -151,9 +151,10 @@ export class Tokenizer {
     );
     if (state.every(hasFAILObject)) {
       return {
-        FAIL: "composeRUD: one or more operations hasn't completed successfully",
+        FAIL:
+          "composeRUD: one or more operations hasn't completed successfully",
         report: state.filter(hasFAILObject),
-      }
+      };
     }
     this.dispatch("composeRUD", [state.filter((op) => !hasFAILObject(op))]);
   }
@@ -188,7 +189,7 @@ export class Tokenizer {
     } else {
       return {
         FAIL: "replaceRange: invalid tokens or startIndex.",
-      }
+      };
     }
   }
 
@@ -354,17 +355,17 @@ export class Tokenizer {
     if (this.getContext(contextName)) {
       return {
         FAIL: `context name '${contextName}' is already registered.`,
-      }
+      };
     }
     if (typeof contextStartCheck !== "function") {
       return {
         FAIL: "missing context start check.",
-      }
+      };
     }
     if (typeof contextEndCheck !== "function") {
       return {
         FAIL: "missing context end check.",
-      }
+      };
     }
     const contextCheckers = new ContextChecker(
       contextName,
@@ -407,7 +408,9 @@ export class Tokenizer {
   resetContextsRanges() {
     const registeredContexts = this.registeredContexts;
     for (const contextName in registeredContexts) {
-      if (Object.prototype.hasOwnProperty.call(registeredContexts, contextName)) {
+      if (
+        Object.prototype.hasOwnProperty.call(registeredContexts, contextName)
+      ) {
         const context = registeredContexts[contextName];
         context.ranges = [];
       }
@@ -530,7 +533,7 @@ export class ContextChecker {
  * @param {number} currentIndex current item index
  */
 export class ContextParams {
-  constructor (context, currentIndex) {
+  constructor(context, currentIndex) {
     this.context = context;
     this.index = currentIndex;
     this.length = context.length;

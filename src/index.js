@@ -1,5 +1,20 @@
-import * as opentype from "./opentype.js";
+import opentype from "./opentype.js";
 
-export default opentype;
+export { opentype as default };
 
-export * from "./opentype.js";
+export const {
+  BoundingBox,
+  Font,
+  Glyph,
+  load,
+  parseBuffer: parse,
+  parseBuffer,
+  Parser,
+  Path,
+  types,
+} = opentype;
+
+/**
+ * @deprecated Use {@link load} instead.
+ */
+export const loadSync = opentype.loadSync;

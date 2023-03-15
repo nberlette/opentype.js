@@ -1,33 +1,34 @@
 // Parsing utility functions
 
-import check from "./check.js";
+import * as check from "./check.js";
+import { log } from "./util.js";
 
 // Retrieve an unsigned byte from the DataView.
-function getByte(dataView, offset) {
+export function getByte(dataView, offset) {
   return dataView.getUint8(offset);
 }
 
 // Retrieve an unsigned 16-bit short from the DataView.
 // The value is stored in big endian.
-function getUShort(dataView, offset) {
+export function getUShort(dataView, offset) {
   return dataView.getUint16(offset, false);
 }
 
 // Retrieve a signed 16-bit short from the DataView.
 // The value is stored in big endian.
-function getShort(dataView, offset) {
+export function getShort(dataView, offset) {
   return dataView.getInt16(offset, false);
 }
 
 // Retrieve an unsigned 32-bit long from the DataView.
 // The value is stored in big endian.
-function getULong(dataView, offset) {
+export function getULong(dataView, offset) {
   return dataView.getUint32(offset, false);
 }
 
 // Retrieve a 32-bit signed fixed-point number (16.16) from the DataView.
 // The value is stored in big endian.
-function getFixed(dataView, offset) {
+export function getFixed(dataView, offset) {
   const decimal = dataView.getInt16(offset, false);
   const fraction = dataView.getUint16(offset + 2, false);
   return decimal + fraction / 65535;
@@ -35,7 +36,7 @@ function getFixed(dataView, offset) {
 
 // Retrieve a 4-character tag from the DataView.
 // Tags are used to identify tables.
-function getTag(dataView, offset) {
+export function getTag(dataView, offset) {
   let tag = "";
   for (let i = offset; i < offset + 4; i += 1) {
     tag += String.fromCharCode(dataView.getInt8(i));
@@ -46,7 +47,7 @@ function getTag(dataView, offset) {
 
 // Retrieve an offset from the DataView.
 // Offsets are 1 to 4 bytes in length, depending on the offSize argument.
-function getOffset(dataView, offset, offSize) {
+export function getOffset(dataView, offset, offSize) {
   let v = 0;
   for (let i = 0; i < offSize; i += 1) {
     v <<= 8;
@@ -57,7 +58,7 @@ function getOffset(dataView, offset, offSize) {
 }
 
 // Retrieve a number of bytes from start offset to the end offset from the DataView.
-function getBytes(dataView, startOffset, endOffset) {
+export function getBytes(dataView, startOffset, endOffset) {
   const bytes = [];
   for (let i = startOffset; i < endOffset; i += 1) {
     bytes.push(dataView.getUint8(i));
@@ -67,7 +68,7 @@ function getBytes(dataView, startOffset, endOffset) {
 }
 
 // Convert the list of bytes to a string.
-function bytesToString(bytes) {
+export function bytesToString(bytes) {
   let s = "";
   for (let i = 0; i < bytes.length; i += 1) {
     s += String.fromCharCode(bytes[i]);
@@ -76,7 +77,7 @@ function bytesToString(bytes) {
   return s;
 }
 
-const typeOffsets = {
+export const typeOffsets = Object.freeze({
   byte: 1,
   uShort: 2,
   short: 2,
@@ -84,11 +85,11 @@ const typeOffsets = {
   fixed: 4,
   longDateTime: 8,
   tag: 4,
-};
+});
 
 // A stateful parser that changes the offset whenever a value is retrieved.
 // The data is a DataView.
-function Parser(data, offset) {
+export function Parser(data, offset) {
   this.data = data;
   this.offset = offset;
   this.relativeOffset = 0;
@@ -518,7 +519,7 @@ Parser.prototype.parseClassDef = function () {
     };
   }
 
-  console.warn(
+  log.warn(
     `0x${
       startOffset.toString(16)
     }: This font file uses an invalid ClassDef format of ${format}. It might be corrupted and should be reacquired if it doesn't display as intended.`,
@@ -659,4 +660,4 @@ export default {
   Parser,
 };
 
-export { Parser };
+export { getByte as getCard8, getUShort as getCard16 };
