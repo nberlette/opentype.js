@@ -1,122 +1,117 @@
-// The Layout object is the prototype of Substitution objects, and provides
-// utility methods to manipulate common layout tables (GPOS, GSUB, GDEF...)
-
-import check from "./check.js";
-
-function searchTag(arr, tag) {
-  /* jshint bitwise: false */
-  let imin = 0;
-  let imax = arr.length - 1;
-  while (imin <= imax) {
-    const imid = (imin + imax) >>> 1;
-    const val = arr[imid].tag;
-    if (val === tag) {
-      return imid;
-    } else if (val < tag) {
-      imin = imid + 1;
-    } else imax = imid - 1;
-  }
-  // Not found: return -1-insertion point
-  return -imin - 1;
-}
-
-function binSearch(arr, value) {
-  /* jshint bitwise: false */
-  let imin = 0;
-  let imax = arr.length - 1;
-  while (imin <= imax) {
-    const imid = (imin + imax) >>> 1;
-    const val = arr[imid];
-    if (val === value) {
-      return imid;
-    } else if (val < value) {
-      imin = imid + 1;
-    } else imax = imid - 1;
-  }
-  // Not found: return -1-insertion point
-  return -imin - 1;
-}
-
-// binary search in a list of ranges (coverage, class definition)
-function searchRange(ranges, value) {
-  // jshint bitwise: false
-  let range;
-  let imin = 0;
-  let imax = ranges.length - 1;
-  while (imin <= imax) {
-    const imid = (imin + imax) >>> 1;
-    range = ranges[imid];
-    const start = range.start;
-    if (start === value) {
-      return range;
-    } else if (start < value) {
-      imin = imid + 1;
-    } else imax = imid - 1;
-  }
-  if (imin > 0) {
-    range = ranges[imin - 1];
-    if (value > range.end) return 0;
-    return range;
-  }
-}
+import * as check from "./check.js";
 
 /**
+ * The Layout object is the prototype of Substitution objects, and provides
+ * utility methods to manipulate common layout tables (GPOS, GSUB, GDEF...)
+ *
  * @exports opentype.Layout
- * @class
  */
-function Layout(font, tableName) {
-  this.font = font;
-  this.tableName = tableName;
-}
+export class Layout {
+  constructor(font, tableName) {
+    this.font = font;
+    this.tableName = tableName;
+  }
 
-Layout.prototype = {
   /**
    * Binary search an object by "tag" property
    * @instance
-   * @function searchTag
+   * @function this.searchTag
    * @memberof opentype.Layout
    * @param  {Array} arr
    * @param  {string} tag
    * @return {number}
    */
-  searchTag: searchTag,
+  searchTag(arr, tag) {
+    /* jshint bitwise: false */
+    let imin = 0;
+    let imax = arr.length - 1;
+    while (imin <= imax) {
+      const imid = (imin + imax) >>> 1;
+      const val = arr[imid].tag;
+      if (val === tag) {
+        return imid;
+      } else if (val < tag) {
+        imin = imid + 1;
+      } else imax = imid - 1;
+    }
+    // Not found: return -1-insertion point
+    return -imin - 1;
+  }
 
   /**
    * Binary search in a list of numbers
    * @instance
-   * @function binSearch
+   * @function this.binSearch
    * @memberof opentype.Layout
    * @param  {Array} arr
    * @param  {number} value
    * @return {number}
    */
-  binSearch: binSearch,
+  binSearch(arr, value) {
+    /* jshint bitwise: false */
+    let imin = 0;
+    let imax = arr.length - 1;
+    while (imin <= imax) {
+      const imid = (imin + imax) >>> 1;
+      const val = arr[imid];
+      if (val === value) {
+        return imid;
+      } else if (val < value) {
+        imin = imid + 1;
+      } else imax = imid - 1;
+    }
+    // Not found: return -1-insertion point
+    return -imin - 1;
+  }
+
+  // binary search in a list of ranges (coverage, class definition)
+  searchRange(ranges, value) {
+    // jshint bitwise: false
+    let range;
+    let imin = 0;
+    let imax = ranges.length - 1;
+    while (imin <= imax) {
+      const imid = (imin + imax) >>> 1;
+      range = ranges[imid];
+      const start = range.start;
+      if (start === value) {
+        return range;
+      } else if (start < value) {
+        imin = imid + 1;
+      } else imax = imid - 1;
+    }
+    if (imin > 0) {
+      range = ranges[imin - 1];
+      if (value > range.end) return 0;
+      return range;
+    }
+  }
 
   /**
    * Get or create the Layout table (GSUB, GPOS etc).
    * @param  {boolean} create - Whether to create a new one.
    * @return {Object} The GSUB or GPOS table.
    */
-  getTable: function (create) {
+  getTable(create) {
     let layout = this.font.tables[this.tableName];
     if (!layout && create) {
       layout = this.font.tables[this.tableName] = this.createDefaultTable();
     }
     return layout;
-  },
+  }
 
   /**
    * Returns all scripts in the substitution table.
    * @instance
    * @return {Array}
    */
-  getScriptNames: function () {
+  getScriptNames() {
     let layout = this.getTable();
     if (!layout) return [];
     return layout.scripts.map(function (script) {
       return script.tag;
     });
-  },
+  }
 
   /**
    * Returns the best bet for a script name.
@@ -124,7 +119,7 @@ Layout.prototype = {
    * If not, returns 'latn' if it exists.
    * If neither exist, returns undefined.
    */
-  getDefaultScriptName: function () {
+  getDefaultScriptName() {
     let layout = this.getTable();
     if (!layout) return;
     let hasLatn = false;
@@ -134,7 +129,7 @@ Layout.prototype = {
       if (name === "latn") hasLatn = true;
     }
     if (hasLatn) return "latn";
-  },
+  }
 
   /**
    * Returns all LangSysRecords in the given script.
@@ -143,12 +138,12 @@ Layout.prototype = {
    * @param {boolean} create - forces the creation of this script table if it doesn't exist.
    * @return {Object} An object with tag and script properties.
    */
-  getScriptTable: function (script, create) {
+  getScriptTable(script, create) {
     const layout = this.getTable(create);
     if (layout) {
       script = script || "DFLT";
       const scripts = layout.scripts;
-      const pos = searchTag(layout.scripts, script);
+      const pos = this.searchTag(layout.scripts, script);
       if (pos >= 0) {
         return scripts[pos].script;
       } else if (create) {
@@ -167,7 +162,7 @@ Layout.prototype = {
         return scr.script;
       }
     }
-  },
+  }
 
   /**
    * Returns a language system table
@@ -177,13 +172,13 @@ Layout.prototype = {
    * @param {boolean} create - forces the creation of this langSysTable if it doesn't exist.
    * @return {Object}
    */
-  getLangSysTable: function (script, language, create) {
+  getLangSysTable(script, language, create) {
     const scriptTable = this.getScriptTable(script, create);
     if (scriptTable) {
       if (!language || language === "dflt" || language === "DFLT") {
         return scriptTable.defaultLangSys;
       }
-      const pos = searchTag(scriptTable.langSysRecords, language);
+      const pos = this.searchTag(scriptTable.langSysRecords, language);
       if (pos >= 0) {
         return scriptTable.langSysRecords[pos].langSys;
       } else if (create) {
@@ -195,7 +190,7 @@ Layout.prototype = {
         return langSysRecord.langSys;
       }
     }
-  },
+  }
 
   /**
    * Get a specific feature table.
@@ -206,7 +201,7 @@ Layout.prototype = {
    * @param {boolean} create - forces the creation of the feature table if it doesn't exist.
    * @return {Object}
    */
-  getFeatureTable: function (script, language, feature, create) {
+  getFeatureTable(script, language, feature, create) {
     const langSysTable = this.getLangSysTable(script, language, create);
     if (langSysTable) {
       let featureRecord;
@@ -236,7 +231,7 @@ Layout.prototype = {
         return featureRecord.feature;
       }
     }
-  },
+  }
 
   /**
    * Get the lookup tables of a given type for a script/language/feature.
@@ -248,7 +243,7 @@ Layout.prototype = {
    * @param {boolean} create - forces the creation of the lookup table if it doesn't exist, with no subtables.
    * @return {Object[]}
    */
-  getLookupTables: function (script, language, feature, lookupType, create) {
+  getLookupTables(script, language, feature, lookupType, create) {
     const featureTable = this.getFeatureTable(
       script,
       language,
@@ -281,7 +276,7 @@ Layout.prototype = {
       }
     }
     return tables;
-  },
+  }
 
   /**
    * Find a glyph in a class definition table
@@ -290,7 +285,7 @@ Layout.prototype = {
    * @param {number} glyphIndex - the index of the glyph to find
    * @returns {number} -1 if not found
    */
-  getGlyphClass: function (classDefTable, glyphIndex) {
+  getGlyphClass(classDefTable, glyphIndex) {
     switch (classDefTable.format) {
       case 1: {
         if (
@@ -302,11 +297,11 @@ Layout.prototype = {
         return 0;
       }
       case 2: {
-        const range = searchRange(classDefTable.ranges, glyphIndex);
+        const range = this.searchRange(classDefTable.ranges, glyphIndex);
         return range ? range.classId : 0;
       }
     }
-  },
+  }
 
   /**
    * Find a glyph in a coverage table
@@ -315,18 +310,18 @@ Layout.prototype = {
    * @param {number} glyphIndex - the index of the glyph to find
    * @returns {number} -1 if not found
    */
-  getCoverageIndex: function (coverageTable, glyphIndex) {
+  getCoverageIndex(coverageTable, glyphIndex) {
     switch (coverageTable.format) {
       case 1: {
-        const index = binSearch(coverageTable.glyphs, glyphIndex);
+        const index = this.binSearch(coverageTable.glyphs, glyphIndex);
         return index >= 0 ? index : -1;
       }
       case 2: {
-        const range = searchRange(coverageTable.ranges, glyphIndex);
+        const range = this.searchRange(coverageTable.ranges, glyphIndex);
         return range ? range.index + glyphIndex - range.start : -1;
       }
     }
-  },
+  }
 
   /**
    * Returns the list of glyph indexes of a coverage table.
@@ -336,7 +331,7 @@ Layout.prototype = {
    * @param  {Object} coverageTable
    * @return {Array}
    */
-  expandCoverage: function (coverageTable) {
+  expandCoverage(coverageTable) {
     if (coverageTable.format === 1) {
       return coverageTable.glyphs;
     } else {
@@ -352,7 +347,7 @@ Layout.prototype = {
       }
       return glyphs;
     }
-  },
-};
+  }
+}
 
 export default Layout;
