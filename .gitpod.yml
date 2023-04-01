@@ -1,0 +1,66 @@
+image: nberlette/gitpod-enhanced
+
+tasks:
+  - name: "Deno Setup"
+    before: |
+      # install deno directly from deno.land if necessary
+      which deno &>/dev/null || curl -fsSL https://deno.land/install.sh | sh 2>&1
+
+      # and upgrade it, since we now know deno is installed one way or another.
+      deno upgrade --canary 2>/dev/null
+    init: |
+      # if deno binary exists in path, ensure that it is not from homebrew
+      command -v deno 2>/dev/null | grep -q "linuxbrew" &&
+        brew uninstall deno &>/dev/null;
+
+      # ensure the correct deno install location is in PATH
+      export DENO_INSTALL="$HOME/.deno" PATH="$DENO_INSTALL/bin:$PATH"
+
+      # export to gitpod environment for this workspace
+      eval $(gp env -e DENO_INSTALL="$DENO_INSTALL" PATH="$PATH")
+
+      # ensure the deno install dir exists
+      [ ! -d "$DENO_INSTALL" ] && mkdir -p "$DENO_INSTALL" &>/dev/null;
+      if ! echo -n "$PATH" | grep -q "$DENO_INSTALL/bin"; then
+        export PATH="${DENO_INSTALL:+$DENO_INSTALL/bin:}${PATH-}"
+      fi
+
+      if ! which deno &>/dev/null; then
+        # download and install the latest release from deno.land
+        curl -fsSL https://deno.land/install.sh | sh -
+      fi
+
+      # ensure deno.lock is ignored
+      grep -q "deno.lock" "${GITPOD_REPO_ROOT:-.}/.gitignore" ||
+        echo -e $'\ndeno.lock\n' >> "${GITPOD_REPO_ROOT:-.}/.gitignore";
+    command: |
+      deno task 2>/dev/null
+
+vscode:
+  extensions:
+    - "denoland.vscode-deno"
+    - "editorconfig.editorconfig"
+    - "vsls-contrib.gistfs"
+    - "redhat.vscode-yaml"
+    - "antfu.unocss"
+    - "antfu.browse-lite"
+    - "bierner.markdown-preview-github-styles"
+    - "github.copilot"
+    - "github.copilot-labs"
+    - "quicktype.quicktype"
+    - "gitpod.gitpod-desktop"
+    - "gitpod.gitpod-remote-ssh"
+    - "yzhang.markdown-all-in-one"
+
+github:
+  prebuilds:
+    branches: true
+    pullRequestsFromForks: true
+    addLabel: "gitpod-prebuild"
+    addCheck: "prevent-merge-on-error"
+
+gitConfig:
+  core.eol: "lf"
+  core.autocrlf: "false"
+  commit.gpgsign: "true"
+  tag.gpgsign: "true"
